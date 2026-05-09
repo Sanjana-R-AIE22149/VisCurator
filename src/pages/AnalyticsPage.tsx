@@ -1,15 +1,22 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip,
-  ReferenceLine, ResponsiveContainer, Legend,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { BarChart3, TrendingUp, Target, Layers, Info, Download, Plus } from 'lucide-react';
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const CLASSES = ['cat', 'dog', 'car', 'person', 'bicycle'];
-const CLASS_COLORS = ['#2dd4bf', '#a78bfa', '#f59e0b', '#38bdf8', '#34d399'];
+import { AlertTriangle, BarChart3, Download, Info, Layers, Target, TrendingUp, Columns } from 'lucide-react';
+import { getTrainingMetrics, getTrainingRuns, BASE_URL, type TrainingMetricPoint, type TrainingRunSummary } from '../lib/api';
 
 const GRID_STROKE = '#1e293b';
 const TICK_STYLE = { fill: '#64748b', fontSize: 11 };
@@ -18,245 +25,177 @@ const TOOLTIP_STYLE = {
   labelStyle: { color: '#94a3b8' },
   itemStyle: { color: '#cbd5e1' },
 };
-
-// ─── Mock data generators ─────────────────────────────────────────────────────
-
-type RunConfig = { epochs: number; bestEpoch: number; finalMap50: number; finalMap5095: number; noise: number };
-
-const RUN_CONFIGS: Record<string, RunConfig> = {
-  'run-003': { epochs: 150, bestEpoch: 127, finalMap50: 0.847, finalMap5095: 0.623, noise: 0.008 },
-  'run-002': { epochs: 120, bestEpoch: 98,  finalMap50: 0.791, finalMap5095: 0.571, noise: 0.012 },
-  'run-001': { epochs: 100, bestEpoch: 81,  finalMap50: 0.734, finalMap5095: 0.512, noise: 0.018 },
+const METRIC_COLORS = {
+  loss: '#f97316',
+  accuracy: '#2dd4bf',
+  precision: '#38bdf8',
+  recall: '#a78bfa',
+  map: '#34d399',
+  loss2: '#94a3b8',
 };
 
-const RUN_STATS: Record<string, typeof STAT_STRIP_BASE> = {
-  'run-003': [
-    { label: 'Best Epoch', value: '127' }, { label: 'mAP@50', value: '84.7%' },
-    { label: 'mAP@50-95', value: '62.3%' }, { label: 'Precision', value: '91.2%' },
-    { label: 'Recall', value: '87.8%' }, { label: 'F1 Score', value: '0.894' },
-  ],
-  'run-002': [
-    { label: 'Best Epoch', value: '98' }, { label: 'mAP@50', value: '79.1%' },
-    { label: 'mAP@50-95', value: '57.1%' }, { label: 'Precision', value: '86.4%' },
-    { label: 'Recall', value: '83.2%' }, { label: 'F1 Score', value: '0.848' },
-  ],
-  'run-001': [
-    { label: 'Best Epoch', value: '81' }, { label: 'mAP@50', value: '73.4%' },
-    { label: 'mAP@50-95', value: '51.2%' }, { label: 'Precision', value: '80.1%' },
-    { label: 'Recall', value: '77.5%' }, { label: 'F1 Score', value: '0.788' },
-  ],
-};
-
-const STAT_STRIP_BASE = [
-  { label: 'Best Epoch', value: '127' }, { label: 'mAP@50', value: '84.7%' },
-  { label: 'mAP@50-95', value: '62.3%' }, { label: 'Precision', value: '91.2%' },
-  { label: 'Recall', value: '87.8%' }, { label: 'F1 Score', value: '0.894' },
-];
-
-function seededRand(seed: number) {
-  let s = seed;
-  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
-}
-
-function genLossCurves(cfg: RunConfig) {
-  const rand = seededRand(42);
-  return Array.from({ length: cfg.epochs }, (_, i) => {
-    const e = i + 1;
-    const decay = (start: number, end: number, k: number) =>
-      end + (start - end) * Math.exp(-k * e) + (rand() - 0.5) * cfg.noise * 2;
-    return {
-      epoch: e,
-      boxLoss: +decay(3.2, 0.04, 0.035).toFixed(4),
-      objLoss: +decay(2.8, 0.03, 0.030).toFixed(4),
-      clsLoss: +decay(1.6, 0.01, 0.040).toFixed(4),
-    };
-  });
-}
-
-function genMapCurves(cfg: RunConfig) {
-  const rand = seededRand(99);
-  return Array.from({ length: cfg.epochs }, (_, i) => {
-    const e = i + 1;
-    const t = e / cfg.epochs;
-    const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
-    const map50 = +(cfg.finalMap50 * sigmoid(8 * t - 2) + (rand() - 0.5) * cfg.noise * 3).toFixed(4);
-    const map5095 = +(cfg.finalMap5095 * sigmoid(8 * t - 2.5) + (rand() - 0.5) * cfg.noise * 3).toFixed(4);
-    return { epoch: e, map50: Math.max(0, map50), map5095: Math.max(0, map5095) };
-  });
-}
-
-function genClassDist(cfg: RunConfig) {
-  const rand = seededRand(7);
-  const scale = cfg.finalMap50 / 0.847;
-  return CLASSES.map((cls) => ({
-    cls,
-    train: Math.round((800 + rand() * 400) * scale),
-    val:   Math.round((100 + rand() * 60)  * scale),
-    test:  Math.round((80  + rand() * 50)  * scale),
-  }));
-}
-
-function genPRCurves(cfg: RunConfig) {
-  const rand = seededRand(13);
-  const scale = cfg.finalMap50 / 0.847;
-  return Array.from({ length: 21 }, (_, i) => {
-    const recall = +(i / 20).toFixed(2);
-    const row: Record<string, number> = { recall };
-    CLASSES.forEach((cls, ci) => {
-      const base = (0.97 - recall * 0.55) * (0.88 + ci * 0.02) * scale;
-      row[cls] = +Math.max(0, Math.min(1, base + (rand() - 0.5) * 0.04)).toFixed(4);
-    });
-    return row;
-  });
-}
-
-function genConfusionMatrix(cfg: RunConfig) {
-  const rand = seededRand(55);
-  const scale = cfg.finalMap50 / 0.847;
-  return CLASSES.map((actual, ai) =>
-    CLASSES.map((_, pi) => {
-      if (ai === pi) return +Math.min(1, (0.82 + rand() * 0.15) * scale).toFixed(3);
-      return +Math.max(0, (rand() * 0.08) * (1 - scale * 0.5)).toFixed(3);
-    })
-  );
-}
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
-
-function CustomTooltip({ active, payload, label, unit = '' }: {
-  active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string | number; unit?: string;
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { name: string; value: number; color: string }[];
+  label?: string | number;
 }) {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: '#020617', border: '1px solid #334155', borderRadius: 8, padding: '8px 12px', fontFamily: 'monospace', fontSize: 11 }}>
-      <p style={{ color: '#94a3b8', marginBottom: 4 }}>{unit}{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color, margin: '2px 0' }}>
-          {p.name}: <span style={{ color: '#e2e8f0' }}>{typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span>
+      <p style={{ color: '#94a3b8', marginBottom: 4 }}>Epoch {label}</p>
+      {payload.map((item) => (
+        <p key={item.name} style={{ color: item.color, margin: '2px 0' }}>
+          {item.name}: <span style={{ color: '#e2e8f0' }}>{typeof item.value === 'number' ? item.value.toFixed(4) : item.value}</span>
         </p>
       ))}
     </div>
   );
 }
 
-// ─── Chart components ─────────────────────────────────────────────────────────
-
-function LossCurveChart({ data, bestEpoch }: { data: ReturnType<typeof genLossCurves>; bestEpoch: number }) {
+function LossCurveChart({ data }: { data: TrainingMetricPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
         <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
-        <XAxis dataKey="epoch" tick={TICK_STYLE} interval={24} label={{ value: 'Epoch', position: 'insideBottomRight', offset: -4, fill: '#475569', fontSize: 10 }} />
+        <XAxis dataKey="epoch" tick={TICK_STYLE} />
         <YAxis tick={TICK_STYLE} domain={[0, 'auto']} />
-        <Tooltip content={<CustomTooltip unit="Epoch " />} />
-        <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }} />
-        <ReferenceLine x={bestEpoch} stroke="#64748b" strokeDasharray="4 2" label={{ value: `best`, position: 'top', fill: '#64748b', fontSize: 10 }} />
-        <Line type="monotone" dataKey="boxLoss" name="Box Loss" stroke="#2dd4bf" dot={false} strokeWidth={1.5} />
-        <Line type="monotone" dataKey="objLoss" name="Obj Loss" stroke="#a78bfa" dot={false} strokeWidth={1.5} />
-        <Line type="monotone" dataKey="clsLoss" name="Cls Loss" stroke="#f59e0b" dot={false} strokeWidth={1.5} />
+        <Tooltip content={<CustomTooltip />} />
+        <Line type="monotone" dataKey="loss" name="Loss" stroke={METRIC_COLORS.loss} dot={false} strokeWidth={2} />
       </LineChart>
     </ResponsiveContainer>
   );
 }
 
-function MapChart({ data }: { data: ReturnType<typeof genMapCurves> }) {
+function CompareLossCurveChart({ data }: { data: any[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
+        <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
+        <XAxis dataKey="epoch" tick={TICK_STYLE} />
+        <YAxis tick={TICK_STYLE} domain={[0, 'auto']} />
+        <Tooltip content={<CustomTooltip />} />
+        <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }} />
+        <Line type="monotone" dataKey="loss1" name="Run A Loss" stroke={METRIC_COLORS.loss} dot={false} strokeWidth={2} />
+        <Line type="monotone" dataKey="loss2" name="Run B Loss" stroke={METRIC_COLORS.loss2} dot={false} strokeWidth={2} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function MetricAreaChart({ data }: { data: TrainingMetricPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
         <defs>
-          <linearGradient id="gMap50" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+          <linearGradient id="gAccuracy" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={METRIC_COLORS.accuracy} stopOpacity={0.32} />
+            <stop offset="95%" stopColor={METRIC_COLORS.accuracy} stopOpacity={0} />
           </linearGradient>
-          <linearGradient id="gMap5095" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="#a78bfa" stopOpacity={0} />
+          <linearGradient id="gMap" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={METRIC_COLORS.map} stopOpacity={0.25} />
+            <stop offset="95%" stopColor={METRIC_COLORS.map} stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
-        <XAxis dataKey="epoch" tick={TICK_STYLE} interval={24} />
+        <XAxis dataKey="epoch" tick={TICK_STYLE} />
         <YAxis tick={TICK_STYLE} domain={[0, 1]} />
-        <Tooltip content={<CustomTooltip unit="Epoch " />} />
+        <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }} />
-        <Area type="monotone" dataKey="map50" name="mAP@50" stroke="#2dd4bf" fill="url(#gMap50)" strokeWidth={2} dot={false} />
-        <Area type="monotone" dataKey="map5095" name="mAP@50-95" stroke="#a78bfa" fill="url(#gMap5095)" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+        <Area type="monotone" dataKey="accuracy" name="Accuracy" stroke={METRIC_COLORS.accuracy} fill="url(#gAccuracy)" strokeWidth={2} />
+        <Area type="monotone" dataKey="map" name="mAP" stroke={METRIC_COLORS.map} fill="url(#gMap)" strokeWidth={2} />
+        <Line type="monotone" dataKey="precision" name="Precision" stroke={METRIC_COLORS.precision} dot={false} strokeWidth={1.6} />
+        <Line type="monotone" dataKey="recall" name="Recall" stroke={METRIC_COLORS.recall} dot={false} strokeWidth={1.6} />
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-function ClassDistChart({ data }: { data: ReturnType<typeof genClassDist> }) {
+function SnapshotBarChart({ latest }: { latest: TrainingMetricPoint | null }) {
+  const data = latest
+    ? [
+        { name: 'accuracy', value: latest.accuracy },
+        { name: 'precision', value: latest.precision },
+        { name: 'recall', value: latest.recall },
+        { name: 'mAP', value: latest.map },
+      ]
+    : [];
+
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
         <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
-        <XAxis dataKey="cls" tick={TICK_STYLE} />
-        <YAxis tick={TICK_STYLE} />
+        <XAxis dataKey="name" tick={TICK_STYLE} />
+        <YAxis tick={TICK_STYLE} domain={[0, 1]} />
         <Tooltip {...TOOLTIP_STYLE} />
-        <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }} />
-        <Bar dataKey="train" name="Train" fill="#2dd4bf" radius={[3, 3, 0, 0]} maxBarSize={18} />
-        <Bar dataKey="val"   name="Val"   fill="#38bdf8" radius={[3, 3, 0, 0]} maxBarSize={18} />
-        <Bar dataKey="test"  name="Test"  fill="#f59e0b" radius={[3, 3, 0, 0]} maxBarSize={18} />
+        <Bar dataKey="value" fill={METRIC_COLORS.accuracy} radius={[4, 4, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-function PRChart({ data }: { data: ReturnType<typeof genPRCurves> }) {
+function DeltaChart({ data }: { data: Array<{ epoch: number; accuracy_delta: number; map_delta: number }> }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <ComposedChart data={data} margin={{ top: 8, right: 16, left: -10, bottom: 0 }}>
         <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" />
-        <XAxis dataKey="recall" tick={TICK_STYLE} domain={[0, 1]} label={{ value: 'Recall', position: 'insideBottomRight', offset: -4, fill: '#475569', fontSize: 10 }} />
-        <YAxis tick={TICK_STYLE} domain={[0, 1]} label={{ value: 'Precision', angle: -90, position: 'insideLeft', offset: 14, fill: '#475569', fontSize: 10 }} />
-        <Tooltip content={<CustomTooltip unit="Recall " />} />
-        <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'monospace', color: '#64748b' }} />
-        {CLASSES.map((cls, i) => (
-          <Line key={cls} type="monotone" dataKey={cls} stroke={CLASS_COLORS[i]} dot={false} strokeWidth={1.5} />
-        ))}
+        <XAxis dataKey="epoch" tick={TICK_STYLE} />
+        <YAxis tick={TICK_STYLE} />
+        <Tooltip content={<CustomTooltip />} />
+        <ReferenceLine y={0} stroke="#475569" strokeDasharray="4 2" />
+        <Bar dataKey="accuracy_delta" name="Acc Delta" fill={METRIC_COLORS.precision} maxBarSize={16} radius={[3, 3, 0, 0]} />
+        <Line type="monotone" dataKey="map_delta" name="mAP Delta" stroke={METRIC_COLORS.map} dot={false} strokeWidth={2} />
       </ComposedChart>
     </ResponsiveContainer>
   );
 }
 
-function ConfusionMatrix({ matrix }: { matrix: number[][] }) {
-  const cellSize = 52;
-  const labelW = 52;
-  const pad = 8;
-  const total = CLASSES.length;
-  const svgW = labelW + total * cellSize + pad;
-  const svgH = labelW + total * cellSize + pad;
+function MetricMatrix({ latest }: { latest: TrainingMetricPoint | null }) {
+  const labels = ['acc', 'prec', 'rec', 'map'];
+  const values = latest ? [latest.accuracy, latest.precision, latest.recall, latest.map] : [0, 0, 0, 0];
+  const cellSize = 48;
+  const labelW = 46;
+  const svgW = labelW + labels.length * cellSize + 8;
+  const svgH = labelW + labels.length * cellSize + 8;
 
-  const toColor = (v: number) => {
-    const t = Math.pow(Math.max(0, Math.min(1, v)), 0.6);
-    const r = Math.round(2 + t * (45 - 2));
-    const g = Math.round(12 + t * (212 - 12));
-    const b = Math.round(23 + t * (191 - 23));
+  const matrix = values.map((rowValue) => values.map((colValue) => Number((1 - Math.abs(rowValue - colValue)).toFixed(3))));
+  const toColor = (value: number) => {
+    const t = Math.max(0, Math.min(1, value));
+    const r = Math.round(12 + t * 40);
+    const g = Math.round(24 + t * 190);
+    const b = Math.round(32 + t * 150);
     return `rgb(${r},${g},${b})`;
   };
 
   return (
-    <div className="flex items-center justify-center w-full" style={{ height: 220 }}>
+    <div className="flex w-full items-center justify-center" style={{ height: 220 }}>
       <svg width={svgW} height={svgH} style={{ overflow: 'visible' }}>
-        {/* Axis labels */}
-        <text x={labelW + (total * cellSize) / 2} y={10} textAnchor="middle" fill="#475569" fontSize={10} fontFamily="monospace">Predicted</text>
-        <text x={10} y={labelW + (total * cellSize) / 2} textAnchor="middle" fill="#475569" fontSize={10} fontFamily="monospace" transform={`rotate(-90, 10, ${labelW + (total * cellSize) / 2})`}>Actual</text>
-        {CLASSES.map((cls, i) => (
-          <g key={cls}>
-            <text x={labelW + i * cellSize + cellSize / 2} y={labelW - 6} textAnchor="middle" fill="#64748b" fontSize={10} fontFamily="monospace">{cls}</text>
-            <text x={labelW - 6} y={labelW + i * cellSize + cellSize / 2 + 4} textAnchor="end" fill="#64748b" fontSize={10} fontFamily="monospace">{cls}</text>
+        <text x={labelW + (labels.length * cellSize) / 2} y={10} textAnchor="middle" fill="#475569" fontSize={10} fontFamily="monospace">
+          Metric Consistency
+        </text>
+        {labels.map((label, index) => (
+          <g key={label}>
+            <text x={labelW + index * cellSize + cellSize / 2} y={labelW - 6} textAnchor="middle" fill="#64748b" fontSize={10} fontFamily="monospace">
+              {label}
+            </text>
+            <text x={labelW - 6} y={labelW + index * cellSize + cellSize / 2 + 4} textAnchor="end" fill="#64748b" fontSize={10} fontFamily="monospace">
+              {label}
+            </text>
           </g>
         ))}
-        {matrix.map((row, ai) =>
-          row.map((val, pi) => {
-            const x = labelW + pi * cellSize;
-            const y = labelW + ai * cellSize;
-            const textColor = val > 0.5 ? '#0f172a' : '#94a3b8';
+        {matrix.map((row, rowIndex) =>
+          row.map((value, colIndex) => {
+            const x = labelW + colIndex * cellSize;
+            const y = labelW + rowIndex * cellSize;
+            const textColor = value > 0.5 ? '#0f172a' : '#cbd5e1';
             return (
-              <g key={`${ai}-${pi}`}>
-                <rect x={x} y={y} width={cellSize - 2} height={cellSize - 2} rx={3} fill={toColor(val)} />
+              <g key={`${rowIndex}-${colIndex}`}>
+                <rect x={x} y={y} width={cellSize - 2} height={cellSize - 2} rx={3} fill={toColor(value)} />
                 <text x={x + cellSize / 2 - 1} y={y + cellSize / 2 + 4} textAnchor="middle" fill={textColor} fontSize={10} fontFamily="monospace" fontWeight={600}>
-                  {(val * 100).toFixed(0)}%
+                  {(value * 100).toFixed(0)}%
                 </text>
               </g>
             );
@@ -267,177 +206,411 @@ function ConfusionMatrix({ matrix }: { matrix: number[][] }) {
   );
 }
 
-// ─── CSV export ───────────────────────────────────────────────────────────────
-
-function exportCSV(run: string, lossCurves: ReturnType<typeof genLossCurves>, mapCurves: ReturnType<typeof genMapCurves>) {
-  const rows = ['epoch,boxLoss,objLoss,clsLoss,map50,map5095'];
-  lossCurves.forEach((l, i) => {
-    const m = mapCurves[i];
-    rows.push(`${l.epoch},${l.boxLoss},${l.objLoss},${l.clsLoss},${m.map50},${m.map5095}`);
+function exportCSV(runId: string, metrics: TrainingMetricPoint[]) {
+  const rows = ['epoch,loss,accuracy,precision,recall,map,timestamp'];
+  metrics.forEach((item) => {
+    rows.push(`${item.epoch},${item.loss},${item.accuracy},${item.precision},${item.recall},${item.map},${item.timestamp}`);
   });
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${run}-metrics.csv`;
-  a.click();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${runId}-metrics.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function EmptyChartState({ message }: { message: string }) {
+  return (
+    <div className="flex h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-800/80 bg-slate-950/30 px-6 text-center">
+      <p className="max-w-xs text-[11px] text-slate-500">{message}</p>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
   const [visible, setVisible] = useState(false);
-  const [run, setRun] = useState('run-003');
+  const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
+  const [runId, setRunId] = useState('');
+  const [runId2, setRunId2] = useState('');
+  const [metrics, setMetrics] = useState<TrainingMetricPoint[]>([]);
+  const [metrics2, setMetrics2] = useState<TrainingMetricPoint[]>([]);
+  const [isLoadingRuns, setIsLoadingRuns] = useState(true);
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
+  const [runsError, setRunsError] = useState('');
+  const [metricsError, setMetricsError] = useState('');
+  const [compareMode, setCompareMode] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 60);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setVisible(true), 60);
+    return () => clearTimeout(timer);
   }, []);
 
-  const cfg = RUN_CONFIGS[run];
+  useEffect(() => {
+    let cancelled = false;
+    const syncRuns = async () => {
+      try {
+        const nextRuns = await getTrainingRuns();
+        if (cancelled) return;
+        setRuns(nextRuns);
+        setRunsError('');
+        if (!runId && nextRuns.length > 0) {
+          setRunId(nextRuns[0].run_id);
+          if (nextRuns.length > 1) setRunId2(nextRuns[1].run_id);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRunsError(error instanceof Error ? error.message : 'Unable to load training runs.');
+          setRuns([]);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingRuns(false);
+      }
+    };
 
-  const lossCurves    = useMemo(() => genLossCurves(cfg),    [cfg]);
-  const mapCurves     = useMemo(() => genMapCurves(cfg),     [cfg]);
-  const classDist     = useMemo(() => genClassDist(cfg),     [cfg]);
-  const prCurves      = useMemo(() => genPRCurves(cfg),      [cfg]);
-  const confMatrix    = useMemo(() => genConfusionMatrix(cfg),[cfg]);
-  const stats         = RUN_STATS[run];
+    void syncRuns();
+    const interval = setInterval(() => {
+      void syncRuns();
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [runId]);
 
-  if (Object.keys(RUN_CONFIGS).length === 0) {
+  useEffect(() => {
+    if (!runId) {
+      setMetrics([]);
+      return;
+    }
+    let cancelled = false;
+    const syncMetrics = async () => {
+      if (!cancelled) setIsLoadingMetrics(true);
+      try {
+        const [nextMetrics, nextMetrics2] = await Promise.all([
+          getTrainingMetrics(runId),
+          compareMode && runId2 ? getTrainingMetrics(runId2) : Promise.resolve([])
+        ]);
+        if (!cancelled) {
+          setMetrics(nextMetrics);
+          setMetrics2(nextMetrics2);
+          setMetricsError('');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMetrics([]);
+          setMetrics2([]);
+          setMetricsError(error instanceof Error ? error.message : 'Unable to load metrics.');
+        }
+      } finally {
+        if (!cancelled) setIsLoadingMetrics(false);
+      }
+    };
+
+    void syncMetrics();
+    const interval = setInterval(() => {
+      void syncMetrics();
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [runId, runId2, compareMode]);
+
+  const currentRun = runs.find((item) => item.run_id === runId) ?? null;
+  const latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : null;
+  const hasMetrics = metrics.length > 0;
+
+  const mergedData = useMemo(() => {
+    const map = new Map();
+    metrics.forEach(m => map.set(m.epoch, { epoch: m.epoch, loss1: m.loss, acc1: m.accuracy, map1: m.map }));
+    if (compareMode) {
+      metrics2.forEach(m => {
+        const existing = map.get(m.epoch) || { epoch: m.epoch };
+        existing.loss2 = m.loss;
+        existing.acc2 = m.accuracy;
+        existing.map2 = m.map;
+        map.set(m.epoch, existing);
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => a.epoch - b.epoch);
+  }, [metrics, metrics2, compareMode]);
+
+  const final1 = metrics[metrics.length - 1];
+  const final2 = metrics2[metrics2.length - 1];
+  let accDelta = 0;
+  let mapDelta = 0;
+  let overtookEpoch = '-';
+  if (final1 && final2) {
+    accDelta = final1.accuracy - final2.accuracy;
+    mapDelta = final1.map - final2.map;
+  }
+  const overtake = mergedData.find(d => d.acc1 !== undefined && d.acc2 !== undefined && d.acc1 > d.acc2);
+  if (overtake) overtookEpoch = String(overtake.epoch);
+
+  const stats = latestMetric
+    ? [
+        { label: 'Best Epoch', value: String(latestMetric.epoch) },
+        { label: 'mAP', value: `${(latestMetric.map * 100).toFixed(1)}%` },
+        { label: 'Accuracy', value: `${(latestMetric.accuracy * 100).toFixed(1)}%` },
+        { label: 'Precision', value: `${(latestMetric.precision * 100).toFixed(1)}%` },
+        { label: 'Recall', value: `${(latestMetric.recall * 100).toFixed(1)}%` },
+        { label: 'Loss', value: latestMetric.loss.toFixed(4) },
+      ]
+    : [];
+
+  const deltaSeries = useMemo(
+    () =>
+      metrics.map((item, index) => {
+        const prev = metrics[index - 1];
+        return {
+          epoch: item.epoch,
+          accuracy_delta: prev ? Number((item.accuracy - prev.accuracy).toFixed(4)) : 0,
+          map_delta: prev ? Number((item.map - prev.map).toFixed(4)) : 0,
+        };
+      }),
+    [metrics]
+  );
+
+  if (isLoadingRuns) {
     return (
       <div className="h-full flex items-center justify-center p-6 animate-fade-up">
-        <div className="max-w-md w-full text-center space-y-6">
+        <div className="max-w-md w-full text-center space-y-4">
           <div className="relative inline-flex">
-            <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full animate-pulse" />
-            <div className="relative w-20 h-20 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-2xl">
-              <TrendingUp className="w-10 h-10 text-purple-400" />
+            <div className="absolute inset-0 rounded-full bg-teal-500/20 blur-2xl animate-pulse" />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+              <TrendingUp className="h-10 w-10 text-teal-400" />
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">No Training Runs Yet</h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Your experiment metrics will appear here once you initialize your first model training pipeline.
+            <h2 className="mb-2 text-2xl font-bold text-white">Loading Analytics</h2>
+            <p className="text-sm leading-relaxed text-slate-500">
+              Pulling runs and metrics from the SQLite training store.
             </p>
           </div>
-          <button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all shadow-lg shadow-purple-900/20 active:scale-95">
-            <Plus className="w-5 h-5" />
-            Initialize New Run
-          </button>
         </div>
       </div>
     );
   }
 
-  const CHART_SECTIONS = [
-    {
-      id: 'loss-curves', title: 'Training Loss Curves', subtitle: 'Box, Object, Class loss vs. Epoch',
-      icon: TrendingUp, accent: '#2dd4bf', border: 'rgba(45,212,191,0.2)', glow: 'rgba(45,212,191,0.06)',
-      span: 'md:col-span-2', tag: 'LineChart',
-      chart: <LossCurveChart data={lossCurves} bestEpoch={cfg.bestEpoch} />,
-    },
-    {
-      id: 'val-map', title: 'Validation mAP', subtitle: 'mAP@50 & mAP@50-95 over time',
-      icon: Target, accent: '#a78bfa', border: 'rgba(167,139,250,0.2)', glow: 'rgba(167,139,250,0.06)',
-      span: '', tag: 'AreaChart',
-      chart: <MapChart data={mapCurves} />,
-    },
-    {
-      id: 'class-dist', title: 'Class Distribution', subtitle: 'Label balance across dataset splits',
-      icon: BarChart3, accent: '#38bdf8', border: 'rgba(56,189,248,0.2)', glow: 'rgba(56,189,248,0.06)',
-      span: '', tag: 'BarChart',
-      chart: <ClassDistChart data={classDist} />,
-    },
-    {
-      id: 'precision-recall', title: 'Precision–Recall Curve', subtitle: 'Per-class P–R at threshold 0.5',
-      icon: Layers, accent: '#f59e0b', border: 'rgba(245,158,11,0.2)', glow: 'rgba(245,158,11,0.06)',
-      span: '', tag: 'ComposedChart',
-      chart: <PRChart data={prCurves} />,
-    },
-    {
-      id: 'confusion-matrix', title: 'Confusion Matrix', subtitle: 'Predicted vs. Ground truth (normalized)',
-      icon: Target, accent: '#34d399', border: 'rgba(52,211,153,0.2)', glow: 'rgba(52,211,153,0.06)',
-      span: '', tag: 'SVG HeatMap',
-      chart: <ConfusionMatrix matrix={confMatrix} />,
-    },
-  ];
-
   return (
     <div className="h-full overflow-y-auto">
       <div
-        className="max-w-7xl mx-auto px-6 py-8 space-y-6"
+        className="mx-auto max-w-7xl space-y-6 px-6 py-8"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(12px)',
           transition: 'opacity 0.45s ease, transform 0.45s ease',
         }}
       >
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-[11px] font-mono text-purple-400/80 uppercase tracking-widest mb-1">Experiment Tracker</p>
-            <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Analytics</h1>
-            <p className="text-sm text-slate-500 mt-1">Loss curves, mAP scores, and per-class metrics across training runs.</p>
+            <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-purple-400/80">Experiment Tracker</p>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-100">Analytics</h1>
+            <p className="mt-1 text-sm text-slate-500">Live and historical training metrics from the backend SQLite run store.</p>
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => exportCSV(run, lossCurves, mapCurves)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800/60 text-slate-400 hover:text-slate-200 hover:border-slate-700 transition-colors text-xs font-mono"
+              onClick={() => setCompareMode(!compareMode)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 font-mono text-xs transition-colors ${compareMode ? 'bg-purple-900/40 border-purple-500/50 text-purple-300' : 'border-slate-800/60 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'}`}
             >
-              <Download className="w-3.5 h-3.5" />
+              <Columns className="h-3.5 w-3.5" />
+              Compare
+            </button>
+            <button
+              onClick={() => exportCSV(runId, metrics)}
+              disabled={!runId || metrics.length === 0}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-800/60 bg-slate-900/60 px-3 py-2 font-mono text-xs text-slate-400 transition-colors hover:border-slate-700 hover:text-slate-200 disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" />
               Export CSV
             </button>
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800/60">
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">Run</span>
-              <select
-                value={run}
-                onChange={(e) => setRun(e.target.value)}
-                className="bg-transparent text-slate-300 text-xs focus:outline-none cursor-pointer"
+            {runId && !compareMode && (
+              <a
+                href={`${BASE_URL}/api/builder/train/${runId}/download`}
+                download={`run_${runId}.zip`}
+                className="flex items-center gap-1.5 rounded-xl border border-sky-800/50 bg-sky-900/30 px-3 py-2 font-mono text-xs text-sky-400 transition-colors hover:border-sky-700 hover:bg-sky-900/50"
               >
-                <option value="run-003">run-003 · YOLOv8n</option>
-                <option value="run-002">run-002 · ResNet50</option>
-                <option value="run-001">run-001 · EfficientDet</option>
+                <Download className="h-3.5 w-3.5" />
+                Download Model
+              </a>
+            )}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-800/60 bg-slate-900/60 px-4 py-2">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500">{compareMode ? 'Run A' : 'Run'}</span>
+              <select
+                value={runId}
+                onChange={(e) => setRunId(e.target.value)}
+                className="max-w-[220px] cursor-pointer bg-transparent text-xs text-slate-300 focus:outline-none"
+              >
+                {runs.map((item) => (
+                  <option key={item.run_id} value={item.run_id}>
+                    {item.run_id} · {item.task_type ?? 'training'}
+                  </option>
+                ))}
               </select>
             </div>
+            {compareMode && (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-800/60 bg-slate-900/60 px-4 py-2">
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">Run B</span>
+                <select
+                  value={runId2}
+                  onChange={(e) => setRunId2(e.target.value)}
+                  className="max-w-[220px] cursor-pointer bg-transparent text-xs text-slate-300 focus:outline-none"
+                >
+                  {runs.map((item) => (
+                    <option key={item.run_id} value={item.run_id}>
+                      {item.run_id} · {item.task_type ?? 'training'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Stat strip */}
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-          {stats.map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-center">
-              <p className="text-xl font-bold font-mono text-slate-100">{value}</p>
-              <p className="text-[10px] uppercase tracking-widest text-slate-600 mt-0.5">{label}</p>
+        {compareMode ? (
+          <div className="space-y-6">
+            <div className="overflow-hidden rounded-2xl border border-purple-500/20 bg-slate-900/40 backdrop-blur">
+              <div className="border-b border-purple-500/20 px-5 py-4">
+                <h3 className="text-sm font-semibold text-slate-200">Compare Runs</h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">Overlaid loss curves for selected runs</p>
+              </div>
+              <div className="px-4 py-4">
+                <CompareLossCurveChart data={mergedData} />
+              </div>
             </div>
-          ))}
-        </div>
 
-        {/* Chart Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {CHART_SECTIONS.map(({ id, title, subtitle, icon: Icon, accent, border, glow, span, tag, chart }) => (
-            <div
-              key={id}
-              id={`chart-${id}`}
-              className={`rounded-2xl border overflow-hidden ${span}`}
-              style={{ borderColor: border, background: `${glow}, #0f172a66`, backdropFilter: 'blur(12px)' }}
-            >
-              <div className="flex items-start justify-between px-5 py-4 border-b" style={{ borderColor: border }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg" style={{ background: glow, border: `1px solid ${border}` }}>
-                    <Icon className="w-4 h-4" style={{ color: accent }} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{subtitle}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                  <Info className="w-3 h-3" />
-                  <span className="font-mono">{tag}</span>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 text-center">
+                <h4 className="text-xs font-mono uppercase text-slate-500 mb-1">Final Accuracy Delta</h4>
+                <div className={`text-2xl font-bold ${accDelta > 0 ? 'text-teal-400' : 'text-rose-400'}`}>
+                  {accDelta > 0 ? '+' : ''}{(accDelta * 100).toFixed(2)}%
                 </div>
               </div>
-              <div className="px-4 py-4">{chart}</div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 text-center">
+                <h4 className="text-xs font-mono uppercase text-slate-500 mb-1">Final mAP Delta</h4>
+                <div className={`text-2xl font-bold ${mapDelta > 0 ? 'text-teal-400' : 'text-rose-400'}`}>
+                  {mapDelta > 0 ? '+' : ''}{(mapDelta * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 text-center">
+                <h4 className="text-xs font-mono uppercase text-slate-500 mb-1">A Overtook B at Epoch</h4>
+                <div className="text-2xl font-bold text-slate-200">{overtookEpoch}</div>
+              </div>
             </div>
-          ))}
-        </div>
+
+            {accDelta > 0.02 && (
+              <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 text-center">
+                <p className="text-sm font-medium text-teal-300">🎉 Statistically meaningful improvement in Run A (+{(accDelta * 100).toFixed(1)}%)</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+              {stats.length > 0 ? (
+                stats.map(({ label, value }) => (
+                  <div key={label} className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-center">
+                    <p className="font-mono text-xl font-bold text-slate-100">{value}</p>
+                    <p className="mt-0.5 text-[10px] uppercase tracking-widest text-slate-600">{label}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full rounded-xl border border-slate-800/60 bg-slate-900/40 px-4 py-6 text-center text-[11px] text-slate-500">
+                  {isLoadingMetrics ? 'Loading metrics...' : 'No metrics recorded for the selected run yet.'}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {[
+                {
+                  id: 'loss-curves',
+                  title: 'Training Loss Curve',
+                  subtitle: 'Real per-epoch loss from the selected run',
+                  icon: TrendingUp,
+                  accent: '#f97316',
+                  border: 'rgba(249,115,22,0.2)',
+                  glow: 'rgba(249,115,22,0.06)',
+                  span: 'md:col-span-2',
+                  tag: 'LineChart',
+                  chart: hasMetrics ? <LossCurveChart data={metrics} /> : <EmptyChartState message={metricsError || (isLoadingMetrics ? 'Loading metrics...' : 'No metrics recorded for this run yet.')} />,
+                },
+                {
+                  id: 'validation-metrics',
+                  title: 'Validation Metrics',
+                  subtitle: 'Accuracy, precision, recall, and mAP over time',
+                  icon: Target,
+                  accent: '#34d399',
+                  border: 'rgba(52,211,153,0.2)',
+                  glow: 'rgba(52,211,153,0.06)',
+                  span: '',
+                  tag: 'AreaChart',
+                  chart: hasMetrics ? <MetricAreaChart data={metrics} /> : <EmptyChartState message={metricsError || (isLoadingMetrics ? 'Loading metrics...' : 'Waiting for the first streamed epoch.')} />,
+                },
+                {
+                  id: 'snapshot',
+                  title: 'Latest Metric Snapshot',
+                  subtitle: 'Current validation scores at the latest epoch',
+                  icon: BarChart3,
+                  accent: '#38bdf8',
+                  border: 'rgba(56,189,248,0.2)',
+                  glow: 'rgba(56,189,248,0.06)',
+                  span: '',
+                  tag: 'BarChart',
+                  chart: hasMetrics ? <SnapshotBarChart latest={latestMetric} /> : <EmptyChartState message={metricsError || (isLoadingMetrics ? 'Loading metrics...' : 'Snapshot will appear once metrics are stored.')} />,
+                },
+                {
+                  id: 'delta',
+                  title: 'Improvement Trend',
+                  subtitle: 'Epoch-to-epoch change in accuracy and mAP',
+                  icon: Layers,
+                  accent: '#a78bfa',
+                  border: 'rgba(167,139,250,0.2)',
+                  glow: 'rgba(167,139,250,0.06)',
+                  span: '',
+                  tag: 'ComposedChart',
+                  chart: hasMetrics ? <DeltaChart data={deltaSeries} /> : <EmptyChartState message={metricsError || (isLoadingMetrics ? 'Loading metrics...' : 'Need at least one epoch to calculate deltas.')} />,
+                },
+                {
+                  id: 'matrix',
+                  title: 'Metric Matrix',
+                  subtitle: 'Consistency between the latest headline metrics',
+                  icon: Target,
+                  accent: '#2dd4bf',
+                  border: 'rgba(45,212,191,0.2)',
+                  glow: 'rgba(45,212,191,0.06)',
+                  span: '',
+                  tag: 'SVG HeatMap',
+                  chart: hasMetrics ? <MetricMatrix latest={latestMetric} /> : <EmptyChartState message={metricsError || (isLoadingMetrics ? 'Loading metrics...' : 'Matrix will populate when metrics are available.')} />,
+                },
+              ].map(({ id, title, subtitle, icon: Icon, accent, border, glow, span, tag, chart }) => (
+                <div
+                  key={id}
+                  id={`chart-${id}`}
+                  className={`overflow-hidden rounded-2xl border ${span}`}
+                  style={{ borderColor: border, background: `${glow}, #0f172a66`, backdropFilter: 'blur(12px)' }}
+                >
+                  <div className="flex items-start justify-between border-b px-5 py-4" style={{ borderColor: border }}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="rounded-lg p-2" style={{ background: glow, border: `1px solid ${border}` }}>
+                        <Icon className="h-4 w-4" style={{ color: accent }} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
+                        <p className="mt-0.5 text-[11px] text-slate-500">{subtitle}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
+                      <Info className="h-3 w-3" />
+                      <span className="font-mono">{tag}</span>
+                    </div>
+                  </div>
+                  <div className="px-4 py-4">{chart}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

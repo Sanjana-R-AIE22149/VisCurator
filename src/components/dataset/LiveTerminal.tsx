@@ -1,41 +1,9 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppStore, type TerminalLog } from '../../store/useAppStore';
 
-/* ── Mock pipeline messages (fallback when backend is offline) ── */
-const PIPELINE_MESSAGES: Array<{ message: string; status: TerminalLog['status']; delay: number }> = [
-  { message: '> Initializing CVAgent autonomous pipeline...', status: 'info', delay: 400 },
-  { message: '> Connecting to data source API...', status: 'info', delay: 800 },
-  { message: '> Authentication successful                           [ok]', status: 'ok', delay: 600 },
-  { message: '> Querying dataset repository...', status: 'info', delay: 1000 },
-  { message: '> Found 2,847 candidate images                       [ok]', status: 'ok', delay: 700 },
-  { message: '> Downloading batch 1/6 (512 images)...', status: 'info', delay: 1200 },
-  { message: '> Downloading batch 2/6 (512 images)...', status: 'info', delay: 900 },
-  { message: '> Downloading batch 3/6 (512 images)...', status: 'info', delay: 800 },
-  { message: '> Running Laplacian variance check...', status: 'info', delay: 1400 },
-  { message: '> Filtered 42 blurry images (threshold < 80)         [filtered]', status: 'warn', delay: 600 },
-  { message: '> Running duplicate hash detection (dHash)...', status: 'info', delay: 1100 },
-  { message: '> Removed 17 near-duplicates (hamming dist < 6)      [cleaned]', status: 'warn', delay: 500 },
-  { message: '> Initializing Grounded-SAM for segmentation...', status: 'info', delay: 1300 },
-  { message: '> Loading ViT-H backbone weights...', status: 'info', delay: 900 },
-  { message: '> SAM model loaded                                   [ok]', status: 'ok', delay: 500 },
-  { message: '> Generating bounding box annotations...', status: 'info', delay: 1600 },
-  { message: '> 1,847 / 2,788 images annotated                    [progress]', status: 'info', delay: 1200 },
-  { message: '> 2,788 / 2,788 images annotated                    [complete]', status: 'ok', delay: 800 },
-  { message: '> Running quality scoring (BRISQUE + NIQE)...', status: 'info', delay: 1000 },
-  { message: '> 23 low-quality images flagged (score < 30)         [warn]', status: 'warn', delay: 500 },
-  { message: '> Class distribution: balanced within 8% tolerance   [ok]', status: 'ok', delay: 600 },
-  { message: '> Generating train/val/test splits (70/20/10)...', status: 'info', delay: 700 },
-  { message: '> Writing COCO-format annotations to disk...', status: 'info', delay: 900 },
-  { message: '> Dataset exported: ./output/dataset_v1/             [ok]', status: 'ok', delay: 500 },
-  { message: '> ═══════════════════════════════════════════════════════', status: 'info', delay: 200 },
-  { message: '> Pipeline complete. 2,788 curated images ready.     [done]', status: 'ok', delay: 300 },
-  { message: '> Total time: 4m 32s | Rejected: 82 | Accepted: 2,788', status: 'ok', delay: 100 },
-];
-
 export default function LiveTerminal() {
-  const { terminalLogs, isProcessing, addTerminalLog, jobId } = useAppStore();
+  const { terminalLogs, isProcessing, jobId } = useAppStore();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const hasRunRef = useRef(false);
 
   /* Auto-scroll terminal to bottom */
   useEffect(() => {
@@ -43,37 +11,6 @@ export default function LiveTerminal() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [terminalLogs]);
-
-  /* Run the simulated pipeline (fallback only — when no backend jobId) */
-  const runMockPipeline = useCallback(() => {
-    if (hasRunRef.current) return;
-    hasRunRef.current = true;
-
-    let cumulativeDelay = 0;
-
-    PIPELINE_MESSAGES.forEach((msg, idx) => {
-      cumulativeDelay += msg.delay;
-      setTimeout(() => {
-        addTerminalLog({
-          id: `log-${idx}-${Date.now()}`,
-          timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
-          message: msg.message,
-          status: msg.status,
-        });
-      }, cumulativeDelay);
-    });
-
-    setTimeout(() => {
-      hasRunRef.current = false;
-    }, cumulativeDelay + 500);
-  }, [addTerminalLog]);
-
-  /* Start mock pipeline when isProcessing becomes true AND there's no real job */
-  useEffect(() => {
-    if (isProcessing && !jobId) {
-      runMockPipeline();
-    }
-  }, [isProcessing, jobId, runMockPipeline]);
 
   /**
    * Color coding for terminal log entries.
@@ -141,7 +78,7 @@ export default function LiveTerminal() {
                 Awaiting Execution
               </p>
               <p className="text-[10px] text-slate-600">
-                Pipeline parameters not yet initialized
+                {isProcessing && !jobId ? 'Connecting to backend pipeline...' : 'Pipeline parameters not yet initialized'}
               </p>
             </div>
           </div>

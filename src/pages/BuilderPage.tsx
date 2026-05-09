@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -23,10 +23,11 @@ import DropoutNode from '../components/builder/nodes/DropoutNode';
 import OutputNode from '../components/builder/nodes/OutputNode';
 import ComponentPalette from '../components/builder/ComponentPalette';
 import CopilotPanel from '../components/builder/CopilotPanel';
+import TrainingTerminal from '../components/builder/TrainingTerminal';
 
 function BuilderCanvas() {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } = useAppStore();
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
 
   const nodeTypes: NodeTypes = useMemo(
     () => ({
@@ -75,6 +76,15 @@ function BuilderCanvas() {
     },
     [screenToFlowPosition, addNode]
   );
+
+  useEffect(() => {
+    if (nodes.length > 0) {
+      const handle = window.setTimeout(() => {
+        void fitView({ padding: 0.35, duration: 400 });
+      }, 40);
+      return () => window.clearTimeout(handle);
+    }
+  }, [fitView, nodes]);
 
   return (
     <div className="flex-1 relative h-full">
@@ -135,14 +145,34 @@ function BuilderCanvas() {
 }
 
 export default function BuilderPage() {
+  const { clonedRecipe, setClonedRecipe } = useAppStore();
+
+  useEffect(() => {
+    if (clonedRecipe) {
+      const t = setTimeout(() => setClonedRecipe(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [clonedRecipe, setClonedRecipe]);
+
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative">
+      {clonedRecipe && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-sky-500/20 border border-sky-500/50 text-sky-100 px-6 py-2 rounded-xl shadow-lg backdrop-blur-md animate-fade-down flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+          <span className="text-sm font-semibold tracking-wide">Loaded: {clonedRecipe}</span>
+        </div>
+      )}
       <ReactFlowProvider>
         {/* Left: Component Palette */}
         <ComponentPalette />
 
-        {/* Center: React Flow Canvas */}
-        <BuilderCanvas />
+        {/* Center: React Flow Canvas + Training Terminal */}
+        <div className="flex-1 h-full flex flex-col min-w-0">
+          <BuilderCanvas />
+          <div className="px-4 pb-4">
+            <TrainingTerminal />
+          </div>
+        </div>
 
         {/* Right: AI Co-Pilot */}
         <CopilotPanel />

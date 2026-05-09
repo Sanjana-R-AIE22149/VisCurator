@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Cpu, Eye, EyeOff, Loader2, Sparkles, ShieldCheck, Zap } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { AppUser } from '../store/useAppStore';
+import { apiLogin, setToken } from '../lib/api';
 
 /* ── Floating particle effect ── */
 const PARTICLES = Array.from({ length: 24 }, (_, i) => ({
@@ -14,24 +15,17 @@ const PARTICLES = Array.from({ length: 24 }, (_, i) => ({
   duration: Math.random() * 6 + 6,
 }));
 
-const MOCK_USER: AppUser = {
-  id: 'usr_01',
-  name: 'Ayana Chen',
-  email: 'ayana@cvagent.ai',
-  role: 'ML Engineer',
-  avatarInitials: 'AC',
-};
-
 export default function LoginPage() {
   const { isAuthenticated, login } = useAppStore();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/';
 
-  const [email, setEmail] = useState('ayana@cvagent.ai');
-  const [password, setPassword] = useState('••••••••••');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -39,18 +33,31 @@ export default function LoginPage() {
     return () => clearTimeout(t);
   }, []);
 
-  // Already authenticated → skip the login page
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    // Simulate async auth handshake
-    await new Promise((r) => setTimeout(r, 1400));
-    login(MOCK_USER);
-    navigate(from, { replace: true });
+    try {
+      const data = await apiLogin(username, password);
+      setToken(data.access_token);
+      const user: AppUser = {
+        id: data.username,
+        name: data.name,
+        email: `${data.username}@viscurator`,
+        role: data.role,
+        avatarInitials: data.name.slice(0, 2).toUpperCase(),
+      };
+      login(user);
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -163,20 +170,27 @@ export default function LoginPage() {
 
           {/* ── Form ── */}
           <form onSubmit={handleLogin} className="space-y-4" id="login-form">
-            {/* Email */}
+            {/* Error banner */}
+            {error && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-400">
+                {error}
+              </div>
+            )}
+
+            {/* Username */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider" htmlFor="login-email">
-                Email
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider" htmlFor="login-username">
+                Username
               </label>
               <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="login-username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-slate-200 text-sm placeholder-slate-600 focus:outline-none focus:border-teal-500/60 focus:ring-1 focus:ring-teal-500/30 transition-all duration-200"
-                placeholder="you@cvagent.ai"
+                placeholder="admin"
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
 

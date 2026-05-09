@@ -11,7 +11,6 @@ import {
   addEdge,
 } from '@xyflow/react';
 
-/* ── Auth ── */
 export interface AppUser {
   id: string;
   name: string;
@@ -25,7 +24,6 @@ interface AuthState {
   user: AppUser | null;
 }
 
-/* ── UI ── */
 export interface Toast {
   id: string;
   message: string;
@@ -40,7 +38,6 @@ interface UIState {
   shortcutHintDismissed: boolean;
 }
 
-/* ── Hardware Stats ── */
 export interface HardwareStats {
   gpuModel: string;
   vramUsed: number;
@@ -49,7 +46,6 @@ export interface HardwareStats {
   ramPercent: number;
 }
 
-/* ── Terminal Log Entry ── */
 export interface TerminalLog {
   id: string;
   timestamp: string;
@@ -58,7 +54,6 @@ export interface TerminalLog {
   msgType?: 'thought' | 'tool_call' | 'tool_result' | 'script_log' | 'log' | 'done' | 'error';
 }
 
-/* ── Dataset Result from Agent ── */
 export interface DatasetResult {
   dataset_id: string;
   description: string;
@@ -67,9 +62,75 @@ export interface DatasetResult {
   metadata?: Record<string, unknown>;
 }
 
-/* ── Dataset Pipeline State ── */
+export interface ProcessingPlan {
+  needs_blur_filtering: boolean;
+  needs_deduplication: boolean;
+  needs_augmentation: boolean;
+  needs_synthetic_generation: boolean;
+  recommended_augmentations: string[];
+  recommended_model: string;
+  reasoning: string;
+  input_summary?: Record<string, unknown>;
+}
+
+export interface PreprocessingReport {
+  output_dir?: string;
+  before_stats?: {
+    images?: number;
+    class_distribution?: Record<string, number>;
+  };
+  after_stats?: {
+    images?: number;
+    class_distribution?: Record<string, number>;
+    blur_filtered?: number;
+    duplicates_removed?: number;
+  };
+  class_distribution?: Record<string, number>;
+  augmentation_summary?: {
+    operations?: string[];
+    augmented_images?: number;
+    synthetic_generation_recommended?: boolean;
+  };
+  blur_scatter?: Array<{ id: number; laplacian: number; resolution: number; accepted: boolean }>;
+}
+
+export interface DatasetOption {
+  source: string;
+  dataset_id: string;
+  name: string;
+  description: string;
+  size_estimate: string;
+  url: string;
+  pros: string[];
+  cons: string[];
+}
+
+export interface PipelineQuestion {
+  type: 'clarification' | 'dataset_selection';
+  question: string;
+  options: DatasetOption[] | string[];
+  recommendation?: string;
+  context?: string;
+}
+
+export interface TrainingMetricPoint {
+  run_id: string;
+  epoch: number;
+  loss: number;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  map: number;
+  timestamp: string;
+  eta?: string;
+  total_epochs?: number;
+  task_type?: string;
+}
+
 interface DatasetState {
   isProcessing: boolean;
+  isPaused: boolean;
+  pendingQuestion: PipelineQuestion | null;
   terminalLogs: TerminalLog[];
   datasetQuery: string;
   datasetSource: 'HuggingFace' | 'OpenImages';
@@ -77,9 +138,24 @@ interface DatasetState {
   blurData: Array<{ id: number; laplacian: number; resolution: number; accepted: boolean }>;
   jobId: string | null;
   datasetResults: DatasetResult[];
+  // Live stats from quality tool
+  imagesIngested: number | null;
+  qualityScore: number | null;
+  classBalance: string | null;
+  duplicatePercentage: number | null;
+  processingPlan: ProcessingPlan | null;
+  preprocessingReport: PreprocessingReport | null;
+  clonedRecipe: string | null;
 }
 
-/* ── React Flow State ── */
+interface TrainingState {
+  isTraining: boolean;
+  trainingRunId: string | null;
+  trainingTaskType: 'mnist_classification' | 'object_detection';
+  trainingLogs: TerminalLog[];
+  trainingMetrics: TrainingMetricPoint[];
+}
+
 interface FlowState {
   nodes: Node[];
   edges: Edge[];
@@ -88,21 +164,17 @@ interface FlowState {
   onConnect: OnConnect;
 }
 
-/* ── AI Co-Pilot State ── */
 interface CopilotState {
   copilotResponse: string;
   isCopilotStreaming: boolean;
 }
 
-/* ── Combined Store ── */
-interface AppStore extends AuthState, UIState, DatasetState, FlowState, CopilotState {
+interface AppStore extends AuthState, UIState, DatasetState, TrainingState, FlowState, CopilotState {
   hardwareStats: HardwareStats;
 
-  // Auth actions
   login: (user: AppUser) => void;
   logout: () => void;
 
-  // UI actions
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   addToast: (message: string, type: Toast['type']) => void;
@@ -110,82 +182,52 @@ interface AppStore extends AuthState, UIState, DatasetState, FlowState, CopilotS
   setSetupComplete: (v: boolean) => void;
   setNimApiKey: (key: string | null) => void;
   dismissShortcutHint: () => void;
-
-  // Hardware actions
   updateHardwareStats: (stats: Partial<HardwareStats>) => void;
 
-  // Dataset actions
   setDatasetQuery: (q: string) => void;
   setDatasetSource: (s: 'HuggingFace' | 'OpenImages') => void;
   setTargetSize: (n: number) => void;
   startProcessing: () => void;
   stopProcessing: () => void;
+  setPaused: (paused: boolean, question?: PipelineQuestion | null) => void;
+  clearPendingQuestion: () => void;
   addTerminalLog: (log: TerminalLog) => void;
   clearTerminalLogs: () => void;
   setBlurData: (data: DatasetState['blurData']) => void;
   setJobId: (id: string | null) => void;
   setDatasetResults: (results: DatasetResult[]) => void;
+  setImagesIngested: (n: number | null) => void;
+  setQualityScore: (n: number | null) => void;
+  setClassBalance: (s: string | null) => void;
+  setDuplicatePercentage: (n: number | null) => void;
+  setProcessingPlan: (plan: ProcessingPlan | null) => void;
+  setPreprocessingReport: (report: PreprocessingReport | null) => void;
+  setClonedRecipe: (name: string | null) => void;
 
-  // Flow actions
+  startTraining: (runId: string, taskType: TrainingState['trainingTaskType']) => void;
+  stopTraining: () => void;
+  addTrainingLog: (log: TerminalLog) => void;
+  clearTrainingLogs: () => void;
+  appendTrainingMetric: (metric: TrainingMetricPoint) => void;
+  setTrainingMetrics: (metrics: TrainingMetricPoint[]) => void;
+  setTrainingTaskType: (taskType: TrainingState['trainingTaskType']) => void;
+
   addNode: (node: Node) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
-
-  // Copilot actions
   setCopilotResponse: (r: string) => void;
   setIsCopilotStreaming: (v: boolean) => void;
 }
 
-/* ── Initial Nodes ── */
 const initialNodes: Node[] = [
-  {
-    id: 'input-1',
-    type: 'inputNode',
-    position: { x: 50, y: 200 },
-    data: { label: 'Image Input', channels: 3, resolution: '224×224' },
-  },
-  {
-    id: 'conv-1',
-    type: 'convBlock',
-    position: { x: 350, y: 150 },
-    data: { label: 'Conv2d Block', filters: 64, kernel: '3×3', activation: 'ReLU' },
-  },
-  {
-    id: 'bn-1',
-    type: 'batchNormNode',
-    position: { x: 650, y: 150 },
-    data: { label: 'BatchNorm2d', num_features: 64, eps: 1e-5, momentum: 0.1 },
-  },
-  {
-    id: 'res-1',
-    type: 'residualBlock',
-    position: { x: 950, y: 150 },
-    data: { label: 'ResBlock', in_channels: 64, out_channels: 64, stride: 1 },
-  },
-  {
-    id: 'attn-1',
-    type: 'attentionBlock',
-    position: { x: 1250, y: 200 },
-    data: { label: 'Self-Attention', heads: 8, dimK: 64 },
-  },
-  {
-    id: 'drop-1',
-    type: 'dropoutNode',
-    position: { x: 1550, y: 200 },
-    data: { label: 'Dropout', p: 0.5 },
-  },
-  {
-    id: 'linear-1',
-    type: 'linearNode',
-    position: { x: 1850, y: 200 },
-    data: { label: 'Linear', in_features: 512, out_features: 10, bias: true, activation: 'ReLU' },
-  },
-  {
-    id: 'out-1',
-    type: 'outputNode',
-    position: { x: 2150, y: 200 },
-    data: { label: 'Output Layer', num_classes: 10, activation: 'Softmax' },
-  },
+  { id: 'input-1', type: 'inputNode', position: { x: 50, y: 200 }, data: { label: 'Image Input', channels: 3, resolution: '224×224' } },
+  { id: 'conv-1', type: 'convBlock', position: { x: 350, y: 150 }, data: { label: 'Conv2d Block', filters: 64, kernel: '3×3', activation: 'ReLU' } },
+  { id: 'bn-1', type: 'batchNormNode', position: { x: 650, y: 150 }, data: { label: 'BatchNorm2d', num_features: 64 } },
+  { id: 'res-1', type: 'residualBlock', position: { x: 950, y: 150 }, data: { label: 'ResBlock', in_channels: 64, out_channels: 64, stride: 1 } },
+  { id: 'attn-1', type: 'attentionBlock', position: { x: 1250, y: 200 }, data: { label: 'Self-Attention', heads: 8, dimK: 64 } },
+  { id: 'drop-1', type: 'dropoutNode', position: { x: 1550, y: 200 }, data: { label: 'Dropout', p: 0.5 } },
+  { id: 'linear-1', type: 'linearNode', position: { x: 1850, y: 200 }, data: { label: 'Linear', in_features: 512, out_features: 10, activation: 'ReLU' } },
+  { id: 'out-1', type: 'outputNode', position: { x: 2150, y: 200 }, data: { label: 'Output Layer', num_classes: 10, activation: 'Softmax' } },
 ];
 
 const initialEdges: Edge[] = [
@@ -201,48 +243,31 @@ const initialEdges: Edge[] = [
 export const useAppStore = create<AppStore>()(
   persist(
     (set, get) => ({
-      /* ── Auth ── */
       isAuthenticated: false,
       user: null,
-
       login: (user) => set({ isAuthenticated: true, user }),
       logout: () => set({ isAuthenticated: false, user: null }),
 
-      /* ── UI ── */
       sidebarOpen: false,
       toasts: [],
       setupComplete: false,
       nimApiKey: null,
       shortcutHintDismissed: false,
-
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       addToast: (message, type) =>
-        set((s) => ({
-          toasts: [
-            ...s.toasts.slice(-2),
-            { id: crypto.randomUUID(), message, type },
-          ],
-        })),
-      removeToast: (id) =>
-        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+        set((s) => ({ toasts: [...s.toasts.slice(-2), { id: crypto.randomUUID(), message, type }] })),
+      removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
       setSetupComplete: (v) => set({ setupComplete: v }),
       setNimApiKey: (key) => set({ nimApiKey: key }),
       dismissShortcutHint: () => set({ shortcutHintDismissed: true }),
 
-      /* ── Hardware ── */
-      hardwareStats: {
-        gpuModel: 'NVIDIA RTX 4090',
-        vramUsed: 8.4,
-        vramTotal: 24,
-        cpuPercent: 34,
-        ramPercent: 61,
-      },
-      updateHardwareStats: (stats) =>
-        set((s) => ({ hardwareStats: { ...s.hardwareStats, ...stats } })),
+      hardwareStats: { gpuModel: 'NVIDIA RTX 4090', vramUsed: 8.4, vramTotal: 24, cpuPercent: 34, ramPercent: 61 },
+      updateHardwareStats: (stats) => set((s) => ({ hardwareStats: { ...s.hardwareStats, ...stats } })),
 
-      /* ── Dataset ── */
       isProcessing: false,
+      isPaused: false,
+      pendingQuestion: null,
       terminalLogs: [],
       datasetQuery: '',
       datasetSource: 'HuggingFace',
@@ -250,44 +275,74 @@ export const useAppStore = create<AppStore>()(
       blurData: [],
       jobId: null,
       datasetResults: [],
+      imagesIngested: null,
+      qualityScore: null,
+      classBalance: null,
+      duplicatePercentage: null,
+      processingPlan: null,
+      preprocessingReport: null,
+      clonedRecipe: null,
 
       setDatasetQuery: (q) => set({ datasetQuery: q }),
       setDatasetSource: (s) => set({ datasetSource: s }),
       setTargetSize: (n) => set({ targetSize: n }),
-      startProcessing: () => set({ isProcessing: true, terminalLogs: [] }),
-      stopProcessing: () => set({ isProcessing: false }),
-      addTerminalLog: (log) =>
-        set((state) => ({ terminalLogs: [...state.terminalLogs, log] })),
-      clearTerminalLogs: () => set({ terminalLogs: [], isProcessing: false, jobId: null }),
+      startProcessing: () => set({ isProcessing: true, isPaused: false, pendingQuestion: null, terminalLogs: [] }),
+      stopProcessing: () => set({ isProcessing: false, isPaused: false }),
+      setPaused: (paused, question = null) => set({ isPaused: paused, isProcessing: !paused, pendingQuestion: question }),
+      clearPendingQuestion: () => set({ pendingQuestion: null, isPaused: false }),
+      addTerminalLog: (log) => set((state) => ({ terminalLogs: [...state.terminalLogs, log] })),
+      clearTerminalLogs: () => set({ terminalLogs: [], isProcessing: false, isPaused: false, jobId: null, pendingQuestion: null }),
       setBlurData: (data) => set({ blurData: data }),
       setJobId: (id) => set({ jobId: id }),
       setDatasetResults: (results) => set({ datasetResults: results }),
+      setImagesIngested: (n) => set({ imagesIngested: n }),
+      setQualityScore: (n) => set({ qualityScore: n }),
+      setClassBalance: (s) => set({ classBalance: s }),
+      setDuplicatePercentage: (n) => set({ duplicatePercentage: n }),
+      setProcessingPlan: (plan) => set({ processingPlan: plan }),
+      setPreprocessingReport: (report) => set({ preprocessingReport: report }),
+      setClonedRecipe: (name) => set({ clonedRecipe: name }),
 
-      /* ── React Flow ── */
+      isTraining: false,
+      trainingRunId: null,
+      trainingTaskType: 'mnist_classification',
+      trainingLogs: [],
+      trainingMetrics: [],
+      startTraining: (runId, taskType) =>
+        set({
+          isTraining: true,
+          trainingRunId: runId,
+          trainingTaskType: taskType,
+          trainingLogs: [],
+          trainingMetrics: [],
+        }),
+      stopTraining: () => set({ isTraining: false }),
+      addTrainingLog: (log) => set((state) => ({ trainingLogs: [...state.trainingLogs, log] })),
+      clearTrainingLogs: () => set({ trainingLogs: [], trainingMetrics: [], trainingRunId: null, isTraining: false }),
+      appendTrainingMetric: (metric) =>
+        set((state) => {
+          const existing = state.trainingMetrics.filter((item) => item.epoch !== metric.epoch || item.run_id !== metric.run_id);
+          return { trainingMetrics: [...existing, metric].sort((a, b) => a.epoch - b.epoch) };
+        }),
+      setTrainingMetrics: (metrics) => set({ trainingMetrics: metrics }),
+      setTrainingTaskType: (taskType) => set({ trainingTaskType: taskType }),
+
       nodes: initialNodes,
       edges: initialEdges,
-
-      onNodesChange: (changes) =>
-        set({ nodes: applyNodeChanges(changes, get().nodes) }),
-      onEdgesChange: (changes) =>
-        set({ edges: applyEdgeChanges(changes, get().edges) }),
-      onConnect: (connection) =>
-        set({ edges: addEdge({ ...connection, animated: true }, get().edges) }),
-
+      onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
+      onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
+      onConnect: (connection) => set({ edges: addEdge({ ...connection, animated: true }, get().edges) }),
       addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
       setNodes: (nodes) => set({ nodes }),
       setEdges: (edges) => set({ edges }),
 
-      /* ── Copilot ── */
       copilotResponse: '',
       isCopilotStreaming: false,
-
       setCopilotResponse: (r) => set({ copilotResponse: r }),
       setIsCopilotStreaming: (v) => set({ isCopilotStreaming: v }),
     }),
     {
       name: 'cvagent-auth',
-      // Persist auth & critical UI state
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         user: state.user,

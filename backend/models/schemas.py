@@ -124,6 +124,36 @@ class BuilderCompileRequest(BaseModel):
     edges: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class BuilderTrainRequest(BaseModel):
+    """Body for POST /api/builder/train."""
+
+    nodes: list[dict[str, Any]] = Field(...)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    task_type: str = Field(default="mnist_classification", pattern="^(mnist_classification|object_detection)$")
+    dataset_path: str | None = Field(default=None, description="Path to an ImageFolder-format dataset directory.")
+    compare_mode: bool = Field(default=False, description="Whether to run a parallel training run for comparison.")
+    raw_dataset_path: str | None = Field(default=None, description="Path to the raw dataset for comparison.")
+
+
+class BuilderTrainResponse(BaseModel):
+    """Returned when a training run is created."""
+
+    run_id: str
+    status: str = "queued"
+    task_type: str
+
+
+class TrainingMetricPoint(BaseModel):
+    run_id: str
+    epoch: int
+    loss: float
+    accuracy: float
+    precision: float
+    recall: float
+    map: float
+    timestamp: str
+
+
 # ── Job Status ───────────────────────────────────────────────
 
 class JobStatus(BaseModel):

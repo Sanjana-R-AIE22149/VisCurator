@@ -2,7 +2,8 @@ import { X, Keyboard } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function ShortcutHint() {
-  const { showShortcutHint, dismissShortcutHint } = useAppStore();
+  const { shortcutHintDismissed, dismissShortcutHint } = useAppStore();
+  const showShortcutHint = !shortcutHintDismissed;
 
   if (!showShortcutHint) return null;
 

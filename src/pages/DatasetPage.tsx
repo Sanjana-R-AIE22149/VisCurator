@@ -1,20 +1,80 @@
-import { Database, Sparkles, ShieldCheck, BarChart3 } from 'lucide-react';
+import { BarChart3, CopyCheck, Database, FileText, ScanSearch, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
 import DatasetControls from '../components/dataset/DatasetControls';
+import DatasetBrowser from '../components/dataset/DatasetBrowser';
 import LiveTerminal from '../components/dataset/LiveTerminal';
 import BlurFilterChart from '../components/dataset/BlurFilterChart';
-
-const stats = [
-  { label: 'Images Ingested', value: '—', icon: Database, accent: 'text-teal-400' },
-  { label: 'Auto-Annotated', value: '—', icon: Sparkles, accent: 'text-purple-400' },
-  { label: 'Quality Score', value: '—', icon: ShieldCheck, accent: 'text-emerald-400' },
-  { label: 'Class Balance', value: '—', icon: BarChart3, accent: 'text-amber-400' },
-];
+import PreprocessingReportModal from '../components/dataset/PreprocessingReportModal';
+import { useAppStore } from '../store/useAppStore';
+import { useState } from 'react';
 
 export default function DatasetPage() {
+  const {
+    imagesIngested,
+    qualityScore,
+    classBalance,
+    duplicatePercentage,
+    processingPlan,
+    preprocessingReport,
+    jobId,
+  } = useAppStore();
+
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const stats = [
+    {
+      label: 'Images Ingested',
+      value: imagesIngested !== null ? imagesIngested.toLocaleString() : '—',
+      icon: Database,
+      accent: 'text-teal-400',
+    },
+    {
+      label: 'Augmented',
+      value: preprocessingReport?.augmentation_summary?.augmented_images
+        ? preprocessingReport.augmentation_summary.augmented_images.toLocaleString()
+        : '—',
+      icon: Sparkles,
+      accent: 'text-purple-400',
+    },
+    {
+      label: 'Quality Score',
+      value: qualityScore !== null ? qualityScore.toFixed(1) : '—',
+      icon: ShieldCheck,
+      accent: 'text-emerald-400',
+    },
+    {
+      label: 'Class Balance',
+      value: classBalance ?? '—',
+      icon: BarChart3,
+      accent: 'text-amber-400',
+    },
+  ];
+
+  const recommendationCards = processingPlan
+    ? [
+        {
+          label: 'Blur Filtering',
+          value: processingPlan.needs_blur_filtering ? 'Enabled' : 'Skip',
+          icon: ScanSearch,
+          accent: 'text-sky-400',
+        },
+        {
+          label: 'Deduplication',
+          value: processingPlan.needs_deduplication ? `${(duplicatePercentage ?? 0).toFixed(1)}% estimated duplicates` : 'Low duplicate risk',
+          icon: CopyCheck,
+          accent: 'text-emerald-400',
+        },
+        {
+          label: 'Augmentation',
+          value: processingPlan.needs_augmentation ? processingPlan.recommended_augmentations.join(', ') : 'Not required',
+          icon: Wand2,
+          accent: 'text-violet-400',
+        },
+      ]
+    : [];
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6 animate-fade-up">
-        {/* Page Header */}
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="h-px flex-1 bg-gradient-to-r from-teal-500/40 to-transparent" />
@@ -23,11 +83,10 @@ export default function DatasetPage() {
             Autonomous Data Ingestor
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Configure, execute, and monitor the end-to-end dataset curation pipeline
+            Describe your task — CVAgent searches HuggingFace, Kaggle, Roboflow & more, recommends preprocessing, and exports a processed dataset.
           </p>
         </div>
 
-        {/* Stats Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {stats.map(({ label, value, icon: Icon, accent }) => (
             <div
@@ -38,26 +97,106 @@ export default function DatasetPage() {
                 <Icon className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                  {label}
-                </p>
-                <p className="text-lg font-bold text-slate-200 font-mono">
-                  {value}
-                </p>
+                <p className="text-[10px] uppercase tracking-widest text-slate-500">{label}</p>
+                <p className="text-lg font-bold text-slate-200 font-mono">{value}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Controls */}
+        {/* View Report button — shown once a job has completed preprocessing */}
+        {preprocessingReport && jobId && (
+          <div className="flex items-center gap-3 rounded-xl border border-teal-500/20 bg-teal-500/5 px-4 py-3">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-teal-300">Preprocessing complete</p>
+              {preprocessingReport.output_dir && (
+                <p className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">{preprocessingReport.output_dir}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setReportOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              View Report
+            </button>
+          </div>
+        )}
+
+        <DatasetBrowser />
+
         <DatasetControls />
 
-        {/* Terminal + Chart Grid */}
+        {processingPlan && (
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/30 p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-200">Preprocessing Recommendation</h2>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Deterministic planner output from the backend tools.
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500">Recommended Model</p>
+                <p className="text-sm font-semibold text-teal-300">{processingPlan.recommended_model}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {recommendationCards.map(({ label, value, icon: Icon, accent }) => (
+                <div key={label} className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon className={`w-4 h-4 ${accent}`} />
+                    <p className="text-[10px] uppercase tracking-widest text-slate-500">{label}</p>
+                  </div>
+                  <p className="text-xs text-slate-300">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-teal-500/15 bg-teal-500/5 p-4">
+              <p className="text-xs text-teal-200">{processingPlan.reasoning}</p>
+            </div>
+
+            {preprocessingReport && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Before</p>
+                  <p className="text-lg font-mono font-bold text-slate-200">
+                    {preprocessingReport.before_stats?.images?.toLocaleString() ?? '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">images before processing</p>
+                </div>
+                <div className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">After</p>
+                  <p className="text-lg font-mono font-bold text-slate-200">
+                    {preprocessingReport.after_stats?.images?.toLocaleString() ?? '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">processed export images</p>
+                </div>
+                <div className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Filtered</p>
+                  <p className="text-lg font-mono font-bold text-slate-200">
+                    {(preprocessingReport.after_stats?.blur_filtered ?? 0) + (preprocessingReport.after_stats?.duplicates_removed ?? 0)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    blur: {preprocessingReport.after_stats?.blur_filtered ?? 0} | dupes: {preprocessingReport.after_stats?.duplicates_removed ?? 0}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <LiveTerminal />
           <BlurFilterChart />
         </div>
       </div>
+
+      {reportOpen && jobId && (
+        <PreprocessingReportModal jobId={jobId} onClose={() => setReportOpen(false)} />
+      )}
     </div>
   );
 }
