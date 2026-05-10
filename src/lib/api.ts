@@ -55,6 +55,7 @@ export async function apiLogin(username: string, password: string): Promise<Logi
 // ── Shared types ──────────────────────────────────────────────────────────────
 
 export interface PipelineMessage {
+  id: string;
   type: 'thought' | 'tool_call' | 'tool_result' | 'log' | 'script_log' | 'done' | 'error';
   message: string;
   data: Record<string, unknown>;
@@ -130,23 +131,104 @@ export async function startDatasetPipeline(
   source: string,
   targetSize: number,
 ): Promise<{ job_id: string }> {
+  console.log('[API REQ] startDatasetPipeline:', { query, source, targetSize });
   const res = await fetch(`${BASE_URL}/api/dataset/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ query, source: SOURCE_MAP[source] ?? 'huggingface', target_size: targetSize }),
   });
-  if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+  if (!res.ok) {
+    console.error('[API RES] startDatasetPipeline FAIL:', res.status);
+    throw new Error(`Backend returned ${res.status}`);
+  }
   const data: DatasetSearchResponse = await res.json();
+  console.log('[API RES] startDatasetPipeline OK:', data);
   return { job_id: data.job_id };
 }
 
 export async function replyToJob(jobId: string, reply: string): Promise<void> {
+  console.log('[API REQ] replyToJob:', { jobId, reply });
   const res = await fetch(`${BASE_URL}/api/dataset/reply/${jobId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ reply }),
   });
-  if (!res.ok) throw new Error(`Reply API returned ${res.status}`);
+  if (!res.ok) {
+    console.error('[API RES] replyToJob FAIL:', res.status);
+    throw new Error(`Reply API returned ${res.status}`);
+  }
+  console.log('[API RES] replyToJob OK');
+}
+
+export async function uploadDataset(file: File): Promise<{ job_id: string; files: string[]; slug: string }> {
+  console.log('[API REQ] uploadDataset:', file.name);
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const res = await fetch(`${BASE_URL}/api/dataset/upload`, {
+    method: 'POST',
+    headers: authHeaders(), // FormData sets its own Content-Type with boundary
+    body: formData,
+  });
+  
+  if (!res.ok) {
+    console.error('[API RES] uploadDataset FAIL:', res.status);
+    throw new Error(`Backend returned ${res.status}`);
+  }
+  
+  const data = await res.json();
+  console.log('[API RES] uploadDataset OK:', data);
+  
+  // Fetch job status to get the file list
+  const statusRes = await fetch(`${BASE_URL}/api/dataset/status/${data.job_id}`, { headers: authHeaders() });
+  const statusData = await statusRes.json();
+  
+  return { 
+    job_id: data.job_id, 
+    files: statusData.result?.files || [],
+    slug: statusData.result?.dataset_id || ''
+  };
+}
+
+export async function uploadSeedClass(jobId: string, className: string, files: FileList | File[]): Promise<void> {
+  console.log('[API REQ] uploadSeedClass:', { jobId, className, fileCount: files.length });
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+  
+  const res = await fetch(`${BASE_URL}/api/dataset/seed/${jobId}/${className}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  });
+  
+  if (!res.ok) {
+    console.error('[API RES] uploadSeedClass FAIL:', res.status);
+    throw new Error(`Backend returned ${res.status}`);
+  }
+  console.log('[API RES] uploadSeedClass OK');
+}
+
+export async function startAnnotation(jobId: string): Promise<void> {
+  console.log('[API REQ] startAnnotation:', { jobId });
+  const res = await fetch(`${BASE_URL}/api/dataset/annotate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ job_id: jobId, seeds: {} }),
+  });
+  
+  if (!res.ok) {
+    console.error('[API RES] startAnnotation FAIL:', res.status);
+    let detail = '';
+    try {
+      const errData = await res.json();
+      detail = errData.detail || errData.message || '';
+    } catch {
+      // ignore
+    }
+    throw new Error(`Backend returned ${res.status}${detail ? ': ' + detail : ''}`);
+  }
 }
 
 export async function getDatasetJobs(): Promise<JobListItem[]> {
@@ -162,26 +244,119 @@ export async function getDatasetJobs(): Promise<JobListItem[]> {
   }
 }
 
-// ── WebSockets (token passed as query param since WS headers aren't standard) ─
+// ── WebSocket Management ──────────────────────────────────────────────────────
+
+type WebSocketCallback = (msg: PipelineMessage) => void;
+
+class SafeWebSocket {
+  private ws: WebSocket | null = null;
+  private url: string;
+  private onMessage: WebSocketCallback;
+  private onClose: (event?: CloseEvent) => void;
+  private onError?: (event: Event) => void;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000;
+  private pingInterval: number | null = null;
+  private intentionallyClosed = false;
+
+  constructor(
+    url: string,
+    onMessage: WebSocketCallback,
+    onClose: (event?: CloseEvent) => void,
+    onError?: (event: Event) => void
+  ) {
+    this.url = url;
+    this.onMessage = onMessage;
+    this.onClose = onClose;
+    this.onError = onError;
+    this.connect();
+  }
+
+  private connect() {
+    const token = getToken();
+    const finalUrl = token ? `${this.url}${this.url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : this.url;
+    
+    this.ws = new WebSocket(finalUrl);
+    this.intentionallyClosed = false;
+
+    this.ws.onopen = () => {
+      console.log(`[WS] Connected to ${this.url}`);
+      this.reconnectAttempts = 0;
+      this.reconnectDelay = 1000;
+      this.startHeartbeat();
+    };
+
+    this.ws.onmessage = (event) => {
+      if (event.data === 'pong' || event.data === '{"type":"pong"}') return;
+      try {
+        const msg = JSON.parse(event.data) as PipelineMessage;
+        this.onMessage(msg);
+      } catch (err) {
+        console.warn('[WS] Failed to parse message:', event.data, err);
+      }
+    };
+
+    this.ws.onclose = (event) => {
+      this.stopHeartbeat();
+      if (this.intentionallyClosed) {
+        this.onClose(event);
+        return;
+      }
+
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+        console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+        setTimeout(() => this.connect(), delay);
+      } else {
+        console.error('[WS] Max reconnect attempts reached');
+        this.onClose(event);
+      }
+    };
+
+    this.ws.onerror = (err) => {
+      console.error('[WS] Error:', err);
+      this.onError?.(err);
+    };
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.pingInterval = window.setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 15000);
+  }
+
+  private stopHeartbeat() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  public send(data: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(data);
+    }
+  }
+
+  public close() {
+    this.intentionallyClosed = true;
+    this.stopHeartbeat();
+    this.ws?.close();
+  }
+}
 
 export function connectPipelineWebSocket(
   jobId: string,
   onMessage: (msg: PipelineMessage) => void,
   onClose: (event?: CloseEvent) => void,
   onError?: (event: Event) => void,
-): WebSocket {
-  const token = getToken();
-  const url = token
-    ? `${WS_URL}/ws/pipeline/${jobId}?token=${encodeURIComponent(token)}`
-    : `${WS_URL}/ws/pipeline/${jobId}`;
-  const ws = new WebSocket(url);
-  ws.onmessage = (event) => {
-    try { onMessage(JSON.parse(event.data) as PipelineMessage); }
-    catch { console.warn('[WS] Failed to parse message:', event.data); }
-  };
-  ws.onclose  = (event) => onClose(event);
-  ws.onerror  = (err)   => { console.error('[WS] Error:', err); onError?.(err); };
-  return ws;
+): SafeWebSocket {
+  return new SafeWebSocket(`${WS_URL}/ws/pipeline/${jobId}`, onMessage, onClose, onError);
 }
 
 export function connectTrainingWebSocket(
@@ -189,19 +364,8 @@ export function connectTrainingWebSocket(
   onMessage: (msg: PipelineMessage) => void,
   onClose: (event?: CloseEvent) => void,
   onError?: (event: Event) => void,
-): WebSocket {
-  const token = getToken();
-  const url = token
-    ? `${WS_URL}/ws/train/${runId}?token=${encodeURIComponent(token)}`
-    : `${WS_URL}/ws/train/${runId}`;
-  const ws = new WebSocket(url);
-  ws.onmessage = (event) => {
-    try { onMessage(JSON.parse(event.data) as PipelineMessage); }
-    catch { console.warn('[Train WS] Failed to parse message:', event.data); }
-  };
-  ws.onclose  = (event) => onClose(event);
-  ws.onerror  = (err)   => { console.error('[Train WS] Error:', err); onError?.(err); };
-  return ws;
+): SafeWebSocket {
+  return new SafeWebSocket(`${WS_URL}/ws/train/${runId}`, onMessage, onClose, onError);
 }
 
 // ── Health (public — no auth needed) ─────────────────────────────────────────

@@ -89,7 +89,7 @@ export default function CopilotPanel() {
   } = useAppStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const trainingWsRef = useRef<WebSocket | null>(null);
+  const trainingWsRef = useRef<any>(null);
 
   const [showCompileModal, setShowCompileModal] = useState(false);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
@@ -211,7 +211,7 @@ export default function CopilotPanel() {
 
   const handleTrainingMessage = (msg: PipelineMessage) => {
     addTrainingLog({
-      id: `train-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: msg.id || `train-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
       message: formatTrainingMessage(msg),
       status: mapStatus(msg.type),
@@ -250,18 +250,17 @@ export default function CopilotPanel() {
             addTrainingLog({
               id: `train-close-${Date.now()}`,
               timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
-              message: event && event.code !== 1000 ? `training socket closed (${event.code})` : 'training socket closed',
-              status: event && event.code !== 1000 ? 'warn' : 'info',
+              message: event && event.code !== 1000 ? `Training socket closed (${event.code}). Reconnecting...` : 'Training socket closed.',
+              status: 'info',
               msgType: 'log',
             });
-            stopTraining();
           }
         },
         () => {
           addTrainingLog({
             id: `train-ws-error-${Date.now()}`,
             timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
-            message: 'training websocket error',
+            message: 'Training websocket error. Reconnecting...',
             status: 'warn',
             msgType: 'error',
           });
@@ -283,6 +282,7 @@ export default function CopilotPanel() {
 
   return (
     <>
+      {/* (Rest of the component stays the same) */}
       <div className="h-full w-80 animate-slide-in-right border-l border-slate-800/60 bg-slate-950/80 backdrop-blur-xl flex flex-col">
         <div className="flex items-center gap-2 border-b border-slate-800/50 px-4 py-3">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/15">

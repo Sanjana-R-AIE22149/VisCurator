@@ -72,7 +72,7 @@ function BlurScatterPlot({ points }: { points: BlurPoint[] }) {
         <Tooltip
           cursor={{ strokeDasharray: '3 3', stroke: '#475569' }}
           contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, fontSize: 11, fontFamily: 'monospace' }}
-          formatter={(val: unknown, name: string) => [Number(val).toFixed(1), name]}
+          formatter={(val: any, name: any) => [Number(val).toFixed(1), name]}
         />
         <ReferenceLine y={80} stroke="#f59e0b" strokeDasharray="4 2" strokeOpacity={0.7}
           label={{ value: 'threshold=80', position: 'right', fill: '#f59e0b', fontSize: 9 }} />

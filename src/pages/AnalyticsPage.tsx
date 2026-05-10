@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, BarChart3, Download, Info, Layers, Target, TrendingUp, Columns } from 'lucide-react';
+import { AlertTriangle, BarChart3, Download, Info, Layers, Target, TrendingUp, Columns, Zap } from 'lucide-react';
 import { getTrainingMetrics, getTrainingRuns, BASE_URL, type TrainingMetricPoint, type TrainingRunSummary } from '../lib/api';
 
 const GRID_STROKE = '#1e293b';
@@ -235,6 +235,7 @@ export default function AnalyticsPage() {
   const [runId2, setRunId2] = useState('');
   const [metrics, setMetrics] = useState<TrainingMetricPoint[]>([]);
   const [metrics2, setMetrics2] = useState<TrainingMetricPoint[]>([]);
+  const [annotationReport, setAnnotationReport] = useState<any>(null);
   const [isLoadingRuns, setIsLoadingRuns] = useState(true);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const [runsError, setRunsError] = useState('');
@@ -281,8 +282,29 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!runId) {
       setMetrics([]);
+      setAnnotationReport(null);
       return;
     }
+
+    const fetchAnnotationReport = async () => {
+      try {
+        // Attempt to fetch annotation report assuming the run ID corresponds to a local dataset slug
+        // In a full DB setup, this link would be explicit. For now, we try to load it.
+        const url = `${BASE_URL}/data/${runId}/annotation_report.json`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setAnnotationReport(data);
+        } else {
+          setAnnotationReport(null);
+        }
+      } catch {
+        setAnnotationReport(null);
+      }
+    };
+
+    void fetchAnnotationReport();
+
     let cancelled = false;
     const syncMetrics = async () => {
       if (!cancelled) setIsLoadingMetrics(true);
@@ -467,6 +489,68 @@ export default function AnalyticsPage() {
             )}
           </div>
         </div>
+
+        {annotationReport && (
+          <div className="space-y-6 mb-8 animate-fade-up">
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Zap className="h-5 w-5 text-violet-400" />
+              <h2 className="text-lg font-bold text-slate-100">Auto-Annotation Results</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-5">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-4">Confidence Distribution</p>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-emerald-400">High (&gt;80%)</span>
+                    <span className="font-mono text-slate-300">{annotationReport.confidence_distribution.high}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-amber-400">Medium (&gt;50%)</span>
+                    <span className="font-mono text-slate-300">{annotationReport.confidence_distribution.medium}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-rose-400">Low (&lt;50%)</span>
+                    <span className="font-mono text-slate-300">{annotationReport.confidence_distribution.low}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-5 md:col-span-2">
+                <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-4">Class Balance (Post-Annotation)</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {Object.entries(annotationReport.class_counts).map(([cls, count]) => (
+                    <div key={cls} className="rounded border border-slate-800 bg-slate-950 p-2 text-center">
+                      <p className="text-[10px] text-slate-400 truncate" title={cls}>{cls}</p>
+                      <p className="text-sm font-bold text-slate-200 mt-1">{String(count)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Annotation Preview</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {annotationReport.annotated_samples?.map((sample: any, i: number) => (
+                  <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
+                    <img 
+                      src={`${BASE_URL}/data/${runId}/${sample.url}`}
+                      alt="Annotated"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-black/80 p-1.5 flex justify-between items-center">
+                      <span className="truncate text-[8px] font-bold text-violet-300">{sample.label}</span>
+                      <span className={`text-[8px] font-mono ${sample.confidence > 0.8 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {Math.round(sample.confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {compareMode ? (
           <div className="space-y-6">

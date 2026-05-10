@@ -1,11 +1,15 @@
-import { BarChart3, CopyCheck, Database, FileText, ScanSearch, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
+import { BarChart3, CopyCheck, Database, FileText, ScanSearch, ShieldCheck, Sparkles, Wand2, Download } from 'lucide-react';
 import DatasetControls from '../components/dataset/DatasetControls';
 import DatasetBrowser from '../components/dataset/DatasetBrowser';
 import LiveTerminal from '../components/dataset/LiveTerminal';
 import BlurFilterChart from '../components/dataset/BlurFilterChart';
+import StagePreview from '../components/dataset/StagePreview';
 import PreprocessingReportModal from '../components/dataset/PreprocessingReportModal';
 import { useAppStore } from '../store/useAppStore';
 import { useState } from 'react';
+import { BASE_URL } from '../lib/api';
+
+import AnnotationSeedUI from '../components/dataset/AnnotationSeedUI';
 
 export default function DatasetPage() {
   const {
@@ -113,19 +117,30 @@ export default function DatasetPage() {
                 <p className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">{preprocessingReport.output_dir}</p>
               )}
             </div>
-            <button
-              onClick={() => setReportOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              View Report
-            </button>
+            <div className="flex gap-2">
+              <a
+                href={`${BASE_URL}/api/dataset/download/${preprocessingReport.dataset_id.replace(/\//g, '_')}`}
+                download
+                className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Zip
+              </a>
+              <button
+                onClick={() => setReportOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                View Report
+              </button>
+            </div>
           </div>
         )}
 
         <DatasetBrowser />
 
         <DatasetControls />
+        <AnnotationSeedUI />
 
         {processingPlan && (
           <div className="rounded-xl border border-slate-800/60 bg-slate-900/30 p-5 space-y-4">
@@ -187,6 +202,8 @@ export default function DatasetPage() {
             )}
           </div>
         )}
+
+        <StagePreview />
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <LiveTerminal />

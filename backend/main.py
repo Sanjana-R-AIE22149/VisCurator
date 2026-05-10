@@ -28,7 +28,8 @@ try:
 except ImportError:  # pragma: no cover - environment fallback
     def load_dotenv(*_args: Any, **_kwargs: Any) -> bool:
         return False
-from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, File, UploadFile
+from starlette.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -42,6 +43,7 @@ from backend.models.schemas import (
     BuilderTrainRequest,
     BuilderTrainResponse,
     CopilotAnalyzeRequest,
+    DatasetAnnotateRequest,
     DatasetSearchRequest,
     DatasetSearchResponse,
     JobState,
@@ -67,6 +69,7 @@ logger = logging.getLogger("viscurator")
 # ── In-memory stores ─────────────────────────────────────────
 
 jobs: dict[UUID, dict[str, Any]] = {}
+job_logs: dict[UUID, list[PipelineMessage]] = {}
 training_runs: dict[str, dict[str, Any]] = {}
 
 # Agent sessions persist between WS connections so conversations continue
@@ -301,6 +304,187 @@ async def create_dataset_search(request: DatasetSearchRequest) -> DatasetSearchR
     return DatasetSearchResponse(job_id=job_id, status=JobState.PENDING, created_at=now)
 
 
+import zipfile
+import tempfile
+import aiofiles
+
+@app.post("/api/dataset/upload", response_model=DatasetSearchResponse, tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def upload_dataset(file: UploadFile = File(...)) -> DatasetSearchResponse:
+    """Handle raw dataset upload via ZIP file."""
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="Only .zip files are supported.")
+
+    job_id = uuid4()
+    now = datetime.utcnow()
+    slug = f"local_{job_id.hex[:8]}"
+    
+    # Create directories
+    base_dir = Path("./cvagent_output") / slug
+    raw_dir = base_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save uploaded ZIP to a temporary file, then extract
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+            
+        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            zip_ref.extractall(raw_dir)
+            
+        os.remove(tmp_path)
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid ZIP archive.")
+    except Exception as e:
+        logger.exception("Upload extraction failed")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+
+    valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+    extracted_files = [f.name for f in raw_dir.rglob("*") if f.is_file() and f.suffix.lower() in valid_exts]
+
+    # Register the job as if it were a completed search, ready for the next phase
+    jobs[job_id] = {
+        "job_id": str(job_id),
+        "request": {
+            "query": f"Local Upload: {file.filename}",
+            "source": "local",
+            "target_size": len(extracted_files), 
+        },
+        "status": JobState.COMPLETED,
+        "result": {
+            "paused": True,
+            "type": "local_upload",
+            "dataset_id": slug,
+            "local_path": str(raw_dir),
+            "files": extracted_files,
+            "message": f"Extracted {len(extracted_files)} images for curation."
+        },
+        "created_at": now,
+        "updated_at": now,
+    }
+    
+    logger.info("Local upload job %s created — file='%s'", job_id, file.filename)
+    return DatasetSearchResponse(job_id=job_id, status=JobState.COMPLETED, created_at=now)
+
+@app.post("/api/dataset/seed/{job_id}/{class_name}", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def upload_seeds(job_id: str, class_name: str, files: list[UploadFile] = File(...)):
+    """Upload seed images (or ZIPs) for a specific class."""
+    slug = f"local_{UUID(job_id).hex[:8]}"
+    seed_dir = Path("./cvagent_output") / slug / "seeds" / class_name
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    
+    saved_files = []
+    for file in files:
+        if file.filename.endswith('.zip'):
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                    content = await file.read()
+                    tmp.write(content)
+                    tmp_path = tmp.name
+                with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+                    zip_ref.extractall(seed_dir)
+                os.remove(tmp_path)
+                saved_files.append(f"Extracted {file.filename}")
+            except Exception as e:
+                logger.error("Failed to extract seed ZIP %s: %s", file.filename, e)
+        else:
+            file_path = seed_dir / file.filename
+            content = await file.read()
+            file_path.write_bytes(content)
+            saved_files.append(file.filename)
+            
+    return {"status": "success", "class_name": class_name, "saved": saved_files}
+
+@app.post("/api/dataset/annotate", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def annotate_dataset(req: DatasetAnnotateRequest) -> dict[str, Any]:
+    """Trigger the heavyweight SAM/CLIP auto-annotation process."""
+    job_id_str = req.job_id
+    slug = f"local_{UUID(job_id_str).hex[:8]}"
+    base_dir = Path("./cvagent_output") / slug
+    raw_dir = base_dir / "raw"
+    
+    logger.info("annotate_dataset check: job_id_str=%s, slug=%s, raw_dir=%s, exists=%s", job_id_str, slug, raw_dir.absolute(), raw_dir.exists())
+
+    if not raw_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Raw dataset not found at {raw_dir}. Upload first.")
+
+    # We broadcast status via the pipeline WS room
+    async def _emit(msg: PipelineMessage):
+        job_uuid = UUID(job_id_str)
+        history = job_logs.setdefault(job_uuid, [])
+        history.append(msg)
+        if len(history) > 500:
+            history.pop(0)
+        await manager.broadcast(job_id_str, msg.ws_dict())
+
+    async def run_annotator():
+        await _emit(PipelineMessage(type=MessageType.LOG, message="Starting Foundation Models (SAM + CLIP) for Auto-Annotation..."))
+        
+        script_path = Path(__file__).resolve().parent / "agent" / "annotator.py"
+        
+        import threading
+        import subprocess
+
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _worker():
+            try:
+                proc = subprocess.Popen(
+                    [sys.executable, str(script_path), "--job-id", job_id_str, "--raw-dir", str(raw_dir), "--out-dir", str(base_dir)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                if proc.stdout:
+                    for raw_line in proc.stdout:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip()
+                        if line:
+                            loop.call_soon_threadsafe(queue.put_nowait, line)
+                proc.wait()
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", proc.returncode))
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", 1))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        exit_code = 0
+        while True:
+            item = await queue.get()
+            if isinstance(item, tuple) and item[0] == "DONE":
+                exit_code = item[1]
+                break
+            
+            line = item
+            if line.startswith("EVENT:"):
+                try:
+                    payload = json.loads(line[len("EVENT:"):])
+                    evt = payload.get("event")
+                    msg = payload.get("message", "")
+                    if evt == "started":
+                        await _emit(PipelineMessage(type=MessageType.LOG, message=f"Annotator: {msg}"))
+                    elif evt == "progress":
+                        await _emit(PipelineMessage(type=MessageType.LOG, message=f"Progress: {msg}", data=payload))
+                    elif evt == "error":
+                        await _emit(PipelineMessage(type=MessageType.ERROR, message=f"Annotation Error: {msg}"))
+                    elif evt == "completed":
+                        await _emit(PipelineMessage(type=MessageType.DONE, message=msg, data=payload))
+                    elif evt == "report":
+                        await _emit(PipelineMessage(type=MessageType.TOOL_RESULT, message=msg, data={"preprocessing_report": payload}))
+                    else:
+                        await _emit(PipelineMessage(type=MessageType.SCRIPT_LOG, message=msg))
+                except Exception:
+                    await _emit(PipelineMessage(type=MessageType.SCRIPT_LOG, message=line))
+            else:
+                await _emit(PipelineMessage(type=MessageType.SCRIPT_LOG, message=line))
+
+        if exit_code != 0:
+            await _emit(PipelineMessage(type=MessageType.ERROR, message=f"Annotator exited with code {exit_code}"))
+
+    # Spawn in background so API returns immediately
+    asyncio.create_task(run_annotator())
+    return {"status": "started", "job_id": job_id_str}
+
 @app.get("/api/dataset/status/{job_id}", response_model=JobStatus, tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def get_job_status(job_id: UUID) -> JobStatus:
     job = jobs.get(job_id)
@@ -310,6 +494,32 @@ async def get_job_status(job_id: UUID) -> JobStatus:
 
 
 # ── User reply to a paused job ────────────────────────────────
+
+import shutil
+from fastapi.responses import FileResponse
+
+@app.get("/api/dataset/download/{dataset_slug}", tags=["dataset"])
+async def download_dataset(dataset_slug: str):
+    """Zip and download a processed dataset."""
+    base_dir = Path("./cvagent_output") / dataset_slug / "processed"
+    if not base_dir.exists():
+        raise HTTPException(status_code=404, detail="Dataset not found or not processed yet.")
+    
+    zip_path = Path("./cvagent_output") / f"{dataset_slug}_processed.zip"
+    
+    if not zip_path.exists():
+        # Create zip archive of the processed directory
+        shutil.make_archive(
+            str(zip_path).replace('.zip', ''), 
+            'zip', 
+            str(base_dir)
+        )
+    
+    return FileResponse(
+        path=zip_path,
+        filename=f"{dataset_slug}_processed.zip",
+        media_type="application/zip"
+    )
 
 @app.post("/api/dataset/reply/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def reply_to_job(job_id: UUID, body: dict[str, Any]) -> dict[str, Any]:
@@ -376,17 +586,8 @@ def _record_training_message(run_id: str, message: PipelineMessage) -> None:
 
 
 async def _broadcast_training_message(run_id: str, message: PipelineMessage) -> None:
-    state = training_runs.setdefault(run_id, {"clients": set(), "recent_messages": []})
     _record_training_message(run_id, message)
-    clients = list(state.get("clients", set()))
-    stale: list[WebSocket] = []
-    for client in clients:
-        try:
-            await client.send_json(message.ws_dict())
-        except Exception:
-            stale.append(client)
-    for client in stale:
-        state.get("clients", set()).discard(client)
+    await manager.broadcast(run_id, message.ws_dict())
 
 
 async def _emit_training_log(run_id: str, message_type: MessageType, message: str, data: dict[str, Any] | None = None) -> None:
@@ -399,14 +600,32 @@ async def _emit_training_log(run_id: str, message_type: MessageType, message: st
 async def _run_training_process(run_id: str, run_dir: Path) -> None:
     state = training_runs[run_id]
     try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            str(run_dir / "train.py"),
-            cwd=str(run_dir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
-        )
+        import threading
+        import subprocess
+
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _worker():
+            try:
+                proc = subprocess.Popen(
+                    [sys.executable, str(run_dir / "train.py")],
+                    cwd=str(run_dir),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                )
+                if proc.stdout:
+                    for raw_line in proc.stdout:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip()
+                        if line:
+                            loop.call_soon_threadsafe(queue.put_nowait, line)
+                proc.wait()
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", proc.returncode))
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, ("ERROR", str(e)))
+
+        threading.Thread(target=_worker, daemon=True).start()
     except Exception as exc:
         state["status"] = "failed"
         logger.exception("Training subprocess launch failed for run %s", run_id)
@@ -418,53 +637,65 @@ async def _run_training_process(run_id: str, run_dir: Path) -> None:
         )
         return
 
-    state["process"] = proc
     state["status"] = "running"
 
     try:
-        assert proc.stdout is not None
-        async for raw_line in proc.stdout:
-            line = raw_line.decode("utf-8", errors="replace").rstrip()
-            if not line:
-                continue
+        exit_code = 0
+        while True:
+            item = await queue.get()
+            if isinstance(item, tuple) and item[0] == "DONE":
+                exit_code = item[1]
+                break
+            elif isinstance(item, tuple) and item[0] == "ERROR":
+                state["status"] = "failed"
+                await _emit_training_log(run_id, MessageType.ERROR, f"Process failed: {item[1]}", {})
+                return
+            
+            line = item
 
+            # Robust parsing of METRIC and EVENT logs
             if line.startswith("METRIC:"):
-                payload = json.loads(line[len("METRIC:"):])
-                insert_training_metric(
-                    run_id=run_id,
-                    epoch=int(payload["epoch"]),
-                    loss=float(payload["loss"]),
-                    accuracy=float(payload["accuracy"]),
-                    precision=float(payload["precision"]),
-                    recall=float(payload["recall"]),
-                    map_score=float(payload["map"]),
-                    timestamp=str(payload["timestamp"]),
-                )
-                state["latest_metric"] = payload
-                await _emit_training_log(
-                    run_id,
-                    MessageType.TOOL_RESULT,
-                    f"Epoch {payload['epoch']}/{payload.get('total_epochs', '?')}",
-                    payload,
-                )
+                try:
+                    payload = json.loads(line[len("METRIC:"):])
+                    insert_training_metric(
+                        run_id=run_id,
+                        epoch=int(payload.get("epoch", 0)),
+                        loss=float(payload.get("loss", 0.0)),
+                        accuracy=float(payload.get("accuracy", 0.0)),
+                        precision=float(payload.get("precision", 0.0)),
+                        recall=float(payload.get("recall", 0.0)),
+                        map_score=float(payload.get("map", 0.0)),
+                        timestamp=str(payload.get("timestamp", datetime.utcnow().isoformat())),
+                    )
+                    state["latest_metric"] = payload
+                    await _emit_training_log(
+                        run_id,
+                        MessageType.TOOL_RESULT,
+                        f"Epoch {payload.get('epoch', '?')}/{payload.get('total_epochs', '?')}",
+                        payload,
+                    )
+                except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    logger.warning("Malformed metric line: %s", e)
                 continue
 
             if line.startswith("EVENT:"):
-                payload = json.loads(line[len("EVENT:"):])
-                event = payload.get("event")
-                if event == "completed":
-                    state["status"] = "completed"
-                    await _emit_training_log(run_id, MessageType.DONE, payload.get("message", "Training completed."), payload)
-                elif event == "error":
-                    state["status"] = "failed"
-                    await _emit_training_log(run_id, MessageType.ERROR, payload.get("message", "Training failed."), payload)
-                else:
-                    await _emit_training_log(run_id, MessageType.LOG, payload.get("message", "Training event"), payload)
+                try:
+                    payload = json.loads(line[len("EVENT:"):])
+                    event_kind = payload.get("event")
+                    if event_kind == "completed":
+                        state["status"] = "completed"
+                        await _emit_training_log(run_id, MessageType.DONE, payload.get("message", "Training completed."), payload)
+                    elif event_kind == "error":
+                        state["status"] = "failed"
+                        await _emit_training_log(run_id, MessageType.ERROR, payload.get("message", "Training failed."), payload)
+                    else:
+                        await _emit_training_log(run_id, MessageType.LOG, payload.get("message", "Training event"), payload)
+                except json.JSONDecodeError:
+                    pass
                 continue
 
             await _emit_training_log(run_id, MessageType.SCRIPT_LOG, line, {"run_id": run_id})
 
-        exit_code = await proc.wait()
         state["exit_code"] = exit_code
         if exit_code != 0 and state.get("status") != "failed":
             state["status"] = "failed"
@@ -671,6 +902,45 @@ async def builder_train_metrics(run_id: str) -> list[TrainingMetricPoint]:
     return [TrainingMetricPoint(**row) for row in get_training_metrics(run_id)]
 
 
+# ── WebSocket Management ──────────────────────────────────────────────────────
+
+class ConnectionManager:
+    """Manages active WebSocket connections for pipeline and training rooms."""
+
+    def __init__(self):
+        self.rooms: dict[str, set[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, room_id: str):
+        # WebSocket.accept() should be called by the handler before this if needed, 
+        # but we'll do it here for consistency if not already accepted.
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
+        if room_id not in self.rooms:
+            self.rooms[room_id] = set()
+        self.rooms[room_id].add(websocket)
+
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        if room_id in self.rooms:
+            self.rooms[room_id].discard(websocket)
+            if not self.rooms[room_id]:
+                del self.rooms[room_id]
+
+    async def broadcast(self, room_id: str, message: dict):
+        if room_id not in self.rooms:
+            return
+        dead = []
+        for connection in self.rooms[room_id]:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                dead.append(connection)
+        for d in dead:
+            self.disconnect(d, room_id)
+
+manager = ConnectionManager()
+active_agent_tasks: dict[UUID, asyncio.Task] = {}
+
+
 # ── WebSocket Pipeline ────────────────────────────────────────
 
 @app.websocket("/ws/pipeline/{job_id}")
@@ -680,9 +950,11 @@ async def websocket_pipeline(
     token: str | None = Query(default=None),
 ) -> None:
     from backend.auth import get_ws_user
+    
+    # We must accept the connection first to send auth error if needed
     await websocket.accept()
-    logger.info("WS connected for job %s", job_id)
-
+    rid = str(job_id)
+    
     # Auth check
     user = await get_ws_user(token)
     if not user:
@@ -699,80 +971,109 @@ async def websocket_pipeline(
     if job is None:
         await websocket.send_json({
             "type": MessageType.ERROR, 
-            "message": "Job not found — did you POST to /api/dataset/start first?", 
+            "message": "Job not found.", 
             "timestamp": datetime.utcnow().isoformat(), 
             "id": str(uuid4())
         })
         await websocket.close(code=4004)
         return
 
-    if nim_client is None:
-        await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message="NIM not configured. Set NVIDIA_API_KEY in .env.").ws_dict())
-        await websocket.close(code=4003)
-        return
+    # Add to manager
+    await manager.connect(websocket, rid)
 
-    async def emit(msg: PipelineMessage) -> None:
-        try:
-            await websocket.send_json(msg.ws_dict())
-        except Exception:
-            pass
-
-    job["status"] = JobState.RUNNING
-    job["updated_at"] = datetime.utcnow()
-    request_data = job["request"]
+    async def broadcast_emit(msg: PipelineMessage) -> None:
+        # Record log for catch-up
+        history = job_logs.setdefault(job_id, [])
+        history.append(msg)
+        if len(history) > 500:
+            history.pop(0)
+        # Update job metadata if it's a "done" message
+        if msg.type == MessageType.DONE:
+            job["status"] = JobState.PENDING if msg.data.get("paused") else JobState.COMPLETED
+            job["result"] = msg.data
+            job["updated_at"] = datetime.utcnow()
+        # Broadcast to all clients in the room
+        await manager.broadcast(rid, msg.ws_dict())
 
     try:
-        # Reuse existing agent session if one exists (for conversation continuity)
+        # Catch up the new client with recent logs
+        for msg in job_logs.get(job_id, []):
+            await websocket.send_json(msg.ws_dict())
+
+        # Ensure agent exists and is using the broadcast callback
         agent = agent_sessions.get(job_id)
         if agent is None:
-            agent = DatasetAgent(nim_client=nim_client, job_id=job_id, emit=emit)
+            if nim_client is None:
+                await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message="NIM not configured.").ws_dict())
+                await websocket.close(code=4003)
+                return
+            agent = DatasetAgent(nim_client=nim_client, job_id=job_id, emit=broadcast_emit)
             agent_sessions[job_id] = agent
         else:
-            # Update emit callback for the new WS connection
-            agent._emit = emit
+            agent.update_emit_callback(broadcast_emit)
 
-        # Check if there's a pending user reply (answering a question)
-        user_reply = job.pop("pending_reply", None)
+        # Start/Resume agent run in background if not already running
+        if job_id not in active_agent_tasks or active_agent_tasks[job_id].done():
+            request_data = job["request"]
+            user_reply = job.pop("pending_reply", None)
+            
+            async def run_and_cleanup():
+                try:
+                    await agent.run(
+                        query=request_data["query"],
+                        source=request_data.get("source", "all"),
+                        target_size=request_data["target_size"],
+                        user_reply=user_reply,
+                    )
+                finally:
+                    active_agent_tasks.pop(job_id, None)
+                    if job["status"] == JobState.COMPLETED:
+                        agent_sessions.pop(job_id, None)
 
-        result = await agent.run(
-            query=request_data["query"],
-            source=request_data.get("source", "all"),
-            target_size=request_data["target_size"],
-            user_reply=user_reply,
-        )
+            active_agent_tasks[job_id] = asyncio.create_task(run_and_cleanup())
 
-        if result.get("paused"):
-            job["status"] = JobState.PENDING  # paused = still pending user input
-        else:
-            job["status"] = JobState.COMPLETED
-            # Clean up session when done
-            agent_sessions.pop(job_id, None)
+        # Keep connection alive and handle pings
+        while True:
+            try:
+                # Use a short timeout so we can check for job status updates (replies)
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+                try:
+                    msg = json.loads(data)
+                    if msg.get("type") == "ping":
+                        await websocket.send_text("pong")
+                except json.JSONDecodeError:
+                    pass
+            except asyncio.TimeoutError:
+                # Periodic check for resumed state
+                if job.get("pending_reply") and (job_id not in active_agent_tasks or active_agent_tasks[job_id].done()):
+                    logger.info("[RESUME] Detected reply for job %s, restarting task.", job_id)
+                    request_data = job["request"]
+                    user_reply = job.pop("pending_reply", None)
+                    
+                    async def run_and_cleanup_resume():
+                        try:
+                            await agent.run(
+                                query=request_data["query"],
+                                source=request_data.get("source", "all"),
+                                target_size=request_data["target_size"],
+                                user_reply=user_reply,
+                            )
+                        finally:
+                            active_agent_tasks.pop(job_id, None)
+                            if job["status"] == JobState.COMPLETED:
+                                agent_sessions.pop(job_id, None)
 
-        job["result"] = result
-        job["progress"] = 100.0
-        job["updated_at"] = datetime.utcnow()
+                    active_agent_tasks[job_id] = asyncio.create_task(run_and_cleanup_resume())
+                continue
+            except WebSocketDisconnect:
+                manager.disconnect(websocket, rid)
+                break
 
     except WebSocketDisconnect:
-        logger.info("Client disconnected — job %s", job_id)
-        job["status"] = JobState.PENDING  # keep it resumable
-        job["updated_at"] = datetime.utcnow()
-
+        manager.disconnect(websocket, rid)
     except Exception as exc:
-        logger.exception("Pipeline failed — job %s", job_id)
-        job["status"] = JobState.FAILED
-        job["updated_at"] = datetime.utcnow()
-        try:
-            await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message=str(exc)).ws_dict())
-        except Exception:
-            pass
-
-    finally:
-        try:
-            await websocket.close()
-        except Exception:
-            pass
-
-    logger.info("WS session ended — job %s status=%s", job_id, job["status"])
+        logger.exception("Pipeline WS error for job %s", job_id)
+        manager.disconnect(websocket, rid)
 
 
 @app.websocket("/ws/train/{run_id}")
@@ -802,13 +1103,17 @@ async def websocket_train(
         await websocket.close(code=4004)
         return
 
+    # Ensure run state exists for manager to use
     state = training_runs.setdefault(
         run_id,
-        {"run_id": run_id, "status": "completed", "recent_messages": [], "clients": set()},
+        {"run_id": run_id, "status": "completed", "recent_messages": []},
     )
-    state.setdefault("clients", set()).add(websocket)
+
+    # Add to manager
+    await manager.connect(websocket, run_id)
 
     try:
+        # Catch up with metrics/logs
         for item in state.get("recent_messages", []):
             await websocket.send_json(item)
 
@@ -823,16 +1128,19 @@ async def websocket_train(
                 ).ws_dict()
             )
 
+        # Handle pings and keep connection open
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "ping":
+                    await websocket.send_text("pong")
+            except json.JSONDecodeError:
+                pass
     except WebSocketDisconnect:
-        pass
+        manager.disconnect(websocket, run_id)
     finally:
-        state.get("clients", set()).discard(websocket)
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+        manager.disconnect(websocket, run_id)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +50,12 @@ class JobState(str, Enum):
 
 # ── Request / Response ───────────────────────────────────────
 
+class DatasetAnnotateRequest(BaseModel):
+    """Body for POST /api/dataset/annotate."""
+
+    job_id: str = Field(..., description="The ID of the local upload job.")
+
+
 class DatasetSearchRequest(BaseModel):
     """Body for POST /api/dataset/search."""
 
@@ -85,6 +91,7 @@ class DatasetSearchResponse(BaseModel):
 class PipelineMessage(BaseModel):
     """Single message streamed over the WebSocket pipeline channel."""
 
+    id: UUID = Field(default_factory=uuid4)
     type: MessageType
     message: str = ""
     data: dict[str, Any] = Field(default_factory=dict)
@@ -93,6 +100,7 @@ class PipelineMessage(BaseModel):
     def ws_dict(self) -> dict[str, Any]:
         """Serialize for WebSocket transmission (ISO timestamps)."""
         return {
+            "id": str(self.id),
             "type": self.type.value,
             "message": self.message,
             "data": self.data,

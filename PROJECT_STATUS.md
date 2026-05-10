@@ -87,11 +87,12 @@ What is real:
 - compile endpoint produces deterministic PyTorch code
 - compile modal shows real generated code
 
-## Missing Integrations
+## Missing Integrations / Future Roadmap (V2)
+- **Local Dataset Upload (Drag & Drop)**: Enable users to bypass HuggingFace and upload their own raw image folders.
+- **Auto-Annotation Agent**: A new specialized agent (utilizing foundation models like Grounding DINO or a NIM vision endpoint) to automatically label/box unlabeled datasets based on zero-shot user prompts.
 - No real auth/backend identity integration
 - No real machine telemetry feeding dashboard hardware cards
 - No unified run history across dataset jobs, builder compile artifacts, and training runs
-- No explicit preprocessing artifact browser in UI beyond report-backed summaries
 
 ## Dead Routes / Stub Routes
 - `/settings` is intentionally a stub placeholder in `src/App.tsx`

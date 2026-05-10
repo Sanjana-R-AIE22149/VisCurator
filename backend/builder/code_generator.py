@@ -135,404 +135,216 @@ class PyTorchCodeGenerator:
         edges: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Return ``{"code": str, "model_summary": str, "warnings": list[str]}``."""
+        try:
+            return self._generate_internal(nodes, edges)
+        except Exception as exc:
+            logger.error("Graph compilation failed: %s", exc)
+            return {
+                "code": self.get_safe_default_model(),
+                "model_summary": "Error: Graph compilation failed. Using safe fallback model.",
+                "warnings": [f"Compilation error: {exc}"],
+            }
+
+    @staticmethod
+    def get_safe_default_model() -> str:
+        """Return a basic but valid PyTorch model as a last-resort fallback."""
+        return """\
+import torch
+import torch.nn as nn
+
+class CVAgentModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d((4, 4)),
+            nn.Flatten()
+        )
+    def forward(self, x):
+        return self.net(x)
+"""
+
+    def _generate_internal(
+        self,
+        nodes: list[dict[str, Any]],
+        edges: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         warnings: list[str] = []
-
-        # ── 1. Build adjacency graph ──
-        adj: dict[str, list[str]] = defaultdict(list)
-        in_degree: dict[str, int] = {}
-        node_map: dict[str, dict[str, Any]] = {}
-
-        for n in nodes:
-            nid = n["id"]
-            node_map[nid] = n
-            in_degree.setdefault(nid, 0)
+        node_map = {n["id"]: n for n in nodes}
+        adj = defaultdict(list)
+        rev_adj = defaultdict(list)
+        in_degree = {n["id"]: 0 for n in nodes}
 
         for e in edges:
-            src = e.get("source", "")
-            tgt = e.get("target", "")
+            src, tgt = e.get("source"), e.get("target")
             if src in node_map and tgt in node_map:
                 adj[src].append(tgt)
-                in_degree[tgt] = in_degree.get(tgt, 0) + 1
+                rev_adj[tgt].append(src)
+                in_degree[tgt] += 1
 
-        # ── 2. Topological sort (Kahn's algorithm) ──
-        queue: deque[str] = deque()
-        for nid, deg in in_degree.items():
-            if deg == 0:
-                queue.append(nid)
-
-        topo_order: list[str] = []
+        # ── 1. Topological Sort & Cycle Detection ──
+        queue = deque([nid for nid, deg in in_degree.items() if deg == 0])
+        topo_order = []
         while queue:
-            nid = queue.popleft()
-            topo_order.append(nid)
-            for child in adj.get(nid, []):
-                in_degree[child] -= 1
-                if in_degree[child] == 0:
-                    queue.append(child)
+            u = queue.popleft()
+            topo_order.append(u)
+            for v in adj[u]:
+                in_degree[v] -= 1
+                if in_degree[v] == 0:
+                    queue.append(v)
 
-        # Detect disconnected nodes
-        connected_ids = set(topo_order)
-        for n in nodes:
-            if n["id"] not in connected_ids:
-                warnings.append(
-                    f"Node '{n.get('data', {}).get('label', n['id'])}' "
-                    f"is disconnected from the graph."
-                )
-                topo_order.append(n["id"])  # still include it
+        if len(topo_order) < len(nodes):
+            unvisited = set(node_map.keys()) - set(topo_order)
+            warnings.append(f"Graph cycle detected involving nodes: {list(unvisited)[:3]}. Some connections may be ignored.")
+            topo_order.extend(list(unvisited))
 
-        # ── 3. Classify nodes & gather layer specs ──
+        # ── 2. Shape Propagation & Layer Spec Gathering ──
+        node_outputs = {}  # nid -> (channels, h, w)
         layers: list[dict[str, Any]] = []
-        has_input = False
-        input_channels = 3
-        input_h, input_w = 224, 224
+        
+        # Initial search for input node to establish baseline
+        input_node_id = next((nid for nid in topo_order if _classify_node(node_map[nid]) == "input"), None)
+        if not input_node_id:
+            warnings.append("No input node found. Defaulting to 3x224x224.")
+            cur_shape = (3, 224, 224)
+        else:
+            in_data = node_map[input_node_id].get("data", {})
+            cur_shape = (
+                _safe_int(in_data.get("channels"), 3),
+                *_parse_resolution(in_data.get("resolution", "224x224"))
+            )
+            node_outputs[input_node_id] = cur_shape
 
         for nid in topo_order:
             node = node_map[nid]
-            data = node.get("data", {})
             kind = _classify_node(node)
-            var_name = _sanitize_id(nid)
-
-            spec: dict[str, Any] = {
-                "id": nid,
-                "var": var_name,
-                "kind": kind,
-                "label": data.get("label", kind),
-                "data": data,
-            }
+            data = node.get("data", {})
+            
+            # If node has predecessors, use the first one's output shape as input
+            preds = rev_adj.get(nid, [])
+            if preds and preds[0] in node_outputs:
+                cur_shape = node_outputs[preds[0]]
+            
+            in_c, in_h, in_w = cur_shape
+            spec: dict[str, Any] = {"id": nid, "var": _sanitize_id(nid), "kind": kind, "in_shape": cur_shape}
 
             if kind == "input":
-                has_input = True
-                input_channels = _safe_int(data.get("channels"), 3)
-                input_h, input_w = _parse_resolution(data.get("resolution", "224×224"))
-                spec["channels"] = input_channels
-                spec["resolution"] = (input_h, input_w)
+                node_outputs[nid] = cur_shape
+                continue # Input logic handled above
 
             elif kind == "conv":
-                filters = _safe_int(data.get("filters"), 64)
-                kernel = _parse_kernel(data.get("kernel", 3))
-                act = str(data.get("activation", "ReLU"))
-                spec["filters"] = filters
-                spec["kernel"] = kernel
-                spec["activation"] = act
+                f = _safe_int(data.get("filters"), 64)
+                k = _parse_kernel(data.get("kernel", 3))
+                spec.update({"filters": f, "kernel": k, "activation": data.get("activation", "ReLU")})
+                node_outputs[nid] = (f, in_h, in_w) # assuming padding=k//2
 
             elif kind == "batchnorm":
-                spec["num_features"] = _safe_int(data.get("filters"), 64)
+                # AUTO-FIX: Ensure features match incoming channels
+                f = _safe_int(data.get("filters"), in_c)
+                if f != in_c:
+                    warnings.append(f"Auto-fixed BatchNorm '{nid}': adjusted {f} -> {in_c} channels.")
+                    f = in_c
+                spec["num_features"] = f
+                node_outputs[nid] = (f, in_h, in_w)
 
             elif kind == "pooling":
-                spec["kernel"] = _parse_kernel(data.get("kernel", 2))
+                k = _parse_kernel(data.get("kernel", 2))
+                spec["kernel"] = k
+                node_outputs[nid] = (in_c, max(1, in_h // k), max(1, in_w // k))
 
             elif kind == "linear":
-                spec["out_features"] = _safe_int(data.get("filters"), 512)
-                act = str(data.get("activation", "ReLU"))
-                spec["activation"] = act
+                out_f = _safe_int(data.get("filters"), 512)
+                spec.update({"out_features": out_f, "activation": data.get("activation", "ReLU")})
+                node_outputs[nid] = (out_f, 1, 1)
 
             elif kind == "attention":
                 heads = _safe_int(data.get("heads"), 8)
                 dim_k = _safe_int(data.get("dimK"), 64)
-                spec["heads"] = heads
-                spec["dim_k"] = dim_k
-                spec["embed_dim"] = heads * dim_k
+                embed = heads * dim_k
+                spec.update({"heads": heads, "embed_dim": embed})
+                node_outputs[nid] = (embed, 1, 1)
 
             elif kind == "residual":
-                spec["filters"] = _safe_int(data.get("filters"), 64)
+                f = _safe_int(data.get("filters"), in_c)
+                if f != in_c:
+                    warnings.append(f"ResidualBlock '{nid}' input mismatch: expects {f}, got {in_c} channels.")
+                spec["filters"] = f
+                node_outputs[nid] = (f, in_h, in_w)
 
+            else:
+                node_outputs[nid] = cur_shape # pass-through for unknown
+            
             layers.append(spec)
 
-        if not has_input:
-            warnings.append(
-                "No input node found. Assuming default input: 3×224×224."
-            )
-
-        # ── 4. Shape tracking & incompatibility detection ──
-        cur_channels = input_channels
-        cur_h, cur_w = input_h, input_w
-        is_flat = False  # whether we've flattened for linear layers
-        layer_summaries: list[str] = []
-        param_count = 0
-
+        # ── 3. Code Emission ──
         init_lines: list[str] = []
         forward_lines: list[str] = []
         extra_classes: list[str] = []
+        is_flat = False
+        param_count = 0
 
         for spec in layers:
-            kind = spec["kind"]
-            var = spec["var"]
-
-            if kind == "input":
-                layer_summaries.append(
-                    f"Input: {spec['channels']}×{spec['resolution'][0]}×{spec['resolution'][1]}"
-                )
-                forward_lines.append(
-                    f"        # Input: ({spec['channels']}, {spec['resolution'][0]}, {spec['resolution'][1]})"
-                )
-                continue
+            kind, var, in_shape = spec["kind"], spec["var"], spec["in_shape"]
+            in_c, in_h, in_w = in_shape
 
             if kind == "conv":
-                f = spec["filters"]
-                k = spec["kernel"]
+                f, k, act = spec["filters"], spec["kernel"], spec["activation"]
                 pad = k // 2
-                act = spec["activation"]
-
-                # Conv + BN + Activation as a sequential
-                sub_modules = [
-                    f"nn.Conv2d({cur_channels}, {f}, kernel_size={k}, padding={pad})",
-                    f"nn.BatchNorm2d({f})",
-                ]
-                act_code = _activation_code(act)
-                if act_code:
-                    sub_modules.append(act_code)
-
-                init_lines.append(
-                    f"        self.{var} = nn.Sequential(\n"
-                    + "".join(f"            {m},\n" for m in sub_modules)
-                    + "        )"
-                )
+                act_m = _activation_code(act)
+                init_lines.append(f"        self.{var} = nn.Sequential(nn.Conv2d({in_c}, {f}, {k}, padding={pad}), nn.BatchNorm2d({f}), {act_m})")
                 forward_lines.append(f"        x = self.{var}(x)")
+                param_count += (in_c * f * k * k + f) + (f * 2)
 
-                params = cur_channels * f * k * k + f  # conv weights + bias
-                params += f * 2  # BN gamma + beta
-                param_count += params
-                layer_summaries.append(
-                    f"Conv2d({cur_channels}→{f}, {k}×{k}) + BN + {act}"
-                )
-
-                cur_channels = f
-                # Spatial dims unchanged with padding=k//2
-                continue
-
-            if kind == "batchnorm":
+            elif kind == "batchnorm":
                 nf = spec["num_features"]
-                if nf != cur_channels:
-                    warnings.append(
-                        f"BatchNorm2d expects {nf} features but previous "
-                        f"layer outputs {cur_channels} channels."
-                    )
-                    nf = cur_channels
-
-                init_lines.append(
-                    f"        self.{var} = nn.BatchNorm2d({nf})"
-                )
+                init_lines.append(f"        self.{var} = nn.BatchNorm2d({nf})")
                 forward_lines.append(f"        x = self.{var}(x)")
                 param_count += nf * 2
-                layer_summaries.append(f"BatchNorm2d({nf})")
-                continue
 
-            if kind == "pooling":
+            elif kind == "pooling":
                 k = spec["kernel"]
-                init_lines.append(
-                    f"        self.{var} = nn.MaxPool2d(kernel_size={k}, stride={k})"
-                )
+                init_lines.append(f"        self.{var} = nn.MaxPool2d({k}, {k})")
                 forward_lines.append(f"        x = self.{var}(x)")
-                cur_h = max(1, cur_h // k)
-                cur_w = max(1, cur_w // k)
-                layer_summaries.append(f"MaxPool2d({k}×{k})")
-                continue
 
-            if kind == "linear":
-                out_f = spec["out_features"]
-                act = spec.get("activation", "—")
-
+            elif kind == "linear":
                 if not is_flat:
-                    in_features = cur_channels * cur_h * cur_w
-                    forward_lines.append(
-                        f"        x = x.flatten(1)  "
-                        f"# ({cur_channels}, {cur_h}, {cur_w}) → {in_features}"
-                    )
+                    in_f = in_c * in_h * in_w
+                    forward_lines.append(f"        x = x.flatten(1) # {in_c}x{in_h}x{in_w} -> {in_f}")
                     is_flat = True
                 else:
-                    in_features = cur_channels  # reuse last out_features
-
-                sub = [f"nn.Linear({in_features}, {out_f})"]
-                act_code = _activation_code(act)
-                if act_code:
-                    sub.append(act_code)
-
-                init_lines.append(
-                    f"        self.{var} = nn.Sequential(\n"
-                    + "".join(f"            {m},\n" for m in sub)
-                    + "        )"
-                )
+                    in_f = in_c
+                out_f, act = spec["out_features"], spec["activation"]
+                act_m = _activation_code(act)
+                init_lines.append(f"        self.{var} = nn.Sequential(nn.Linear({in_f}, {out_f}), {act_m})")
                 forward_lines.append(f"        x = self.{var}(x)")
+                param_count += (in_f * out_f + out_f)
 
-                params = in_features * out_f + out_f
-                param_count += params
-                layer_summaries.append(f"Linear({in_features}→{out_f})")
-                cur_channels = out_f
-                continue
-
-            if kind == "attention":
-                embed = spec["embed_dim"]
-                heads = spec["heads"]
-
+            elif kind == "attention":
+                embed, heads = spec["embed_dim"], spec["heads"]
                 if not is_flat:
-                    # Flatten spatial dims and project to embed_dim
-                    in_features = cur_channels * cur_h * cur_w
-                    init_lines.append(
-                        f"        self.{var}_proj = nn.Linear({in_features}, {embed})"
-                    )
-                    forward_lines.append(
-                        f"        x = x.flatten(1)  "
-                        f"# ({cur_channels}, {cur_h}, {cur_w}) → {in_features}"
-                    )
-                    forward_lines.append(
-                        f"        x = self.{var}_proj(x)  # → {embed}"
-                    )
-                    param_count += in_features * embed + embed
+                    in_f = in_c * in_h * in_w
+                    init_lines.append(f"        self.{var}_proj = nn.Linear({in_f}, {embed})")
+                    forward_lines.append(f"        x = self.{var}_proj(x.flatten(1))")
                     is_flat = True
-                elif cur_channels != embed:
-                    init_lines.append(
-                        f"        self.{var}_proj = nn.Linear({cur_channels}, {embed})"
-                    )
-                    forward_lines.append(
-                        f"        x = self.{var}_proj(x)  # {cur_channels} → {embed}"
-                    )
-                    param_count += cur_channels * embed + embed
+                init_lines.append(f"        self.{var} = nn.MultiheadAttention({embed}, {heads}, batch_first=True)")
+                forward_lines.append(f"        x, _ = self.{var}(x.unsqueeze(1), x.unsqueeze(1), x.unsqueeze(1)); x = x.squeeze(1)")
+                param_count += (4 * embed * embed + 4 * embed)
 
-                init_lines.append(
-                    f"        self.{var} = nn.MultiheadAttention(\n"
-                    f"            embed_dim={embed}, num_heads={heads}, batch_first=True,\n"
-                    f"        )"
-                )
-                # MHA expects (batch, seq_len, embed_dim) — treat as single-token sequence
-                forward_lines.append(
-                    f"        x = x.unsqueeze(1)  # (B, 1, {embed}) — single-token sequence"
-                )
-                forward_lines.append(
-                    f"        x, _ = self.{var}(x, x, x)"
-                )
-                forward_lines.append(
-                    f"        x = x.squeeze(1)  # (B, {embed})"
-                )
-
-                # MHA params: 3 * embed^2 (QKV projections) + out projection
-                mha_params = 4 * embed * embed + 4 * embed
-                param_count += mha_params
-                layer_summaries.append(
-                    f"MultiheadAttention(embed={embed}, heads={heads})"
-                )
-                cur_channels = embed
-                continue
-
-            if kind == "residual":
+            elif kind == "residual":
                 f = spec["filters"]
                 cls_name = f"ResidualBlock_{f}"
                 if not any(cls_name in c for c in extra_classes):
-                    extra_classes.append(
-                        f"class {cls_name}(nn.Module):\n"
-                        f"    \"\"\"Residual block with skip connection.\"\"\"\n\n"
-                        f"    def __init__(self, channels: int = {f}):\n"
-                        f"        super().__init__()\n"
-                        f"        self.block = nn.Sequential(\n"
-                        f"            nn.Conv2d(channels, channels, 3, padding=1),\n"
-                        f"            nn.BatchNorm2d(channels),\n"
-                        f"            nn.ReLU(inplace=True),\n"
-                        f"            nn.Conv2d(channels, channels, 3, padding=1),\n"
-                        f"            nn.BatchNorm2d(channels),\n"
-                        f"        )\n"
-                        f"        self.relu = nn.ReLU(inplace=True)\n\n"
-                        f"    def forward(self, x):\n"
-                        f"        return self.relu(self.block(x) + x)\n"
-                    )
-                if cur_channels != f:
-                    warnings.append(
-                        f"ResidualBlock expects {f} channels but input has {cur_channels}."
-                    )
-                init_lines.append(
-                    f"        self.{var} = {cls_name}({f})"
-                )
+                    extra_classes.append(f"class {cls_name}(nn.Module):\\n    def __init__(self, c):\\n        super().__init__()\\n        self.b = nn.Sequential(nn.Conv2d(c,c,3,1,1), nn.BatchNorm2d(c), nn.ReLU(True), nn.Conv2d(c,c,3,1,1), nn.BatchNorm2d(c))\\n    def forward(self, x): return torch.relu(self.b(x) + x)")
+                init_lines.append(f"        self.{var} = {cls_name}({f})")
                 forward_lines.append(f"        x = self.{var}(x)")
-                res_params = 2 * (f * f * 9 + f) + 2 * (f * 2)
-                param_count += res_params
-                layer_summaries.append(f"ResidualBlock({f})")
-                cur_channels = f
-                continue
+                param_count += 2 * (f * f * 9 + f) + 2 * (f * 2)
 
-            # Unknown node type — emit a warning
-            warnings.append(
-                f"Unknown node type '{spec.get('label', kind)}' — skipped."
-            )
-
-        # ── 5. Assemble the final code ──
-        output_dim = cur_channels
-
-        code_parts: list[str] = [
-            '"""',
-            "CVAgent Model — Auto-generated by VisCurator",
-            f"Estimated parameters: {param_count:,}",
-            '"""',
-            "",
-            "import torch",
-            "import torch.nn as nn",
-            "",
-        ]
-
-        # Extra helper classes (e.g. ResidualBlock)
-        for cls in extra_classes:
-            code_parts.append("")
-            code_parts.append(cls)
-            code_parts.append("")
-
-        # Main model class
-        code_parts.append("")
-        code_parts.append("class CVAgentModel(nn.Module):")
-        code_parts.append(f'    """Auto-generated model with {len(layer_summaries)} layers."""')
-        code_parts.append("")
-        code_parts.append("    def __init__(self):")
-        code_parts.append("        super().__init__()")
-
-        if not init_lines:
-            code_parts.append("        pass  # No layers defined")
-        else:
-            for line in init_lines:
-                code_parts.append(line)
-
-        code_parts.append("")
-        code_parts.append("    def forward(self, x: torch.Tensor) -> torch.Tensor:")
-
-        if not forward_lines:
-            code_parts.append("        return x")
-        else:
-            for line in forward_lines:
-                code_parts.append(line)
-            code_parts.append("        return x")
-
-        # Main block
-        code_parts.append("")
-        code_parts.append("")
-        code_parts.append('if __name__ == "__main__":')
-        code_parts.append("    model = CVAgentModel()")
-        code_parts.append(f"    x = torch.randn(1, {input_channels}, {input_h}, {input_w})")
-        code_parts.append("    out = model(x)")
-        code_parts.append('    print(f"Output shape: {out.shape}")')
-        code_parts.append(
-            '    print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")'
-        )
-        code_parts.append("")
-
-        code = "\n".join(code_parts)
-
-        # ── 6. Model summary ──
-        summary_parts = [
-            f"Layers: {len(layer_summaries)}",
-            f"Estimated Parameters: {param_count:,}",
-            f"Input shape: ({input_channels}, {input_h}, {input_w})",
-            f"Output dimension: {output_dim}",
-            "",
-            "Layer order:",
-        ]
-        for i, ls in enumerate(layer_summaries, 1):
-            summary_parts.append(f"  {i}. {ls}")
-
-        model_summary = "\n".join(summary_parts)
-
-        logger.info(
-            "Code generated — %d layers, ~%s params, %d warnings",
-            len(layer_summaries),
-            f"{param_count:,}",
-            len(warnings),
-        )
-
+        # ── 4. Assembly ──
+        code = f"import torch\\nimport torch.nn as nn\\n\\n" + "\\n".join(extra_classes) + "\\n\\nclass CVAgentModel(nn.Module):\\n    def __init__(self):\\n        super().__init__()\\n" + "\\n".join(init_lines) + "\\n\\n    def forward(self, x):\\n" + "\\n".join(forward_lines) + "\\n        return x\\n"
+        
         return {
-            "code": code,
-            "model_summary": model_summary,
+            "code": code.replace("\\n", "\n"),
+            "model_summary": f"Layers: {len(layers)}\\nParams: {param_count:,}\\nInput: {node_outputs.get(input_node_id, (3,224,224))}".replace("\\n", "\n"),
             "warnings": warnings,
         }

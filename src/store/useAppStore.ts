@@ -74,16 +74,18 @@ export interface ProcessingPlan {
 }
 
 export interface PreprocessingReport {
+  dataset_id: string;
   output_dir?: string;
+  plan?: ProcessingPlan;
   before_stats?: {
     images?: number;
     class_distribution?: Record<string, number>;
   };
   after_stats?: {
     images?: number;
-    class_distribution?: Record<string, number>;
     blur_filtered?: number;
     duplicates_removed?: number;
+    class_distribution?: Record<string, number>;
   };
   class_distribution?: Record<string, number>;
   augmentation_summary?: {
@@ -92,7 +94,13 @@ export interface PreprocessingReport {
     synthetic_generation_recommended?: boolean;
   };
   blur_scatter?: Array<{ id: number; laplacian: number; resolution: number; accepted: boolean }>;
+  stage_samples?: {
+    raw: Array<{ url: string; label: string; id: number }>;
+    filtered: Array<{ url: string; label: string; reason: string; id: number }>;
+    processed: Array<{ url: string; label: string; id: number }>;
+  };
 }
+
 
 export interface DatasetOption {
   source: string;
@@ -131,6 +139,8 @@ interface DatasetState {
   isProcessing: boolean;
   isPaused: boolean;
   pendingQuestion: PipelineQuestion | null;
+  localDataset: { slug: string; path: string; files: string[] } | null;
+  setLocalDataset: (data: { slug: string; path: string; files: string[] } | null) => void;
   terminalLogs: TerminalLog[];
   datasetQuery: string;
   datasetSource: 'HuggingFace' | 'OpenImages';
@@ -188,6 +198,7 @@ interface AppStore extends AuthState, UIState, DatasetState, TrainingState, Flow
   setDatasetSource: (s: 'HuggingFace' | 'OpenImages') => void;
   setTargetSize: (n: number) => void;
   startProcessing: () => void;
+  resumeProcessing: () => void;
   stopProcessing: () => void;
   setPaused: (paused: boolean, question?: PipelineQuestion | null) => void;
   clearPendingQuestion: () => void;
@@ -268,6 +279,7 @@ export const useAppStore = create<AppStore>()(
       isProcessing: false,
       isPaused: false,
       pendingQuestion: null,
+      localDataset: null,
       terminalLogs: [],
       datasetQuery: '',
       datasetSource: 'HuggingFace',
@@ -287,10 +299,17 @@ export const useAppStore = create<AppStore>()(
       setDatasetSource: (s) => set({ datasetSource: s }),
       setTargetSize: (n) => set({ targetSize: n }),
       startProcessing: () => set({ isProcessing: true, isPaused: false, pendingQuestion: null, terminalLogs: [] }),
+      resumeProcessing: () => set({ isProcessing: true, isPaused: false, pendingQuestion: null }),
       stopProcessing: () => set({ isProcessing: false, isPaused: false }),
-      setPaused: (paused, question = null) => set({ isPaused: paused, isProcessing: !paused, pendingQuestion: question }),
-      clearPendingQuestion: () => set({ pendingQuestion: null, isPaused: false }),
-      addTerminalLog: (log) => set((state) => ({ terminalLogs: [...state.terminalLogs, log] })),
+      setPaused: (paused, question = null) => set({ isPaused: paused, pendingQuestion: question }),
+      setLocalDataset: (data) => set({ localDataset: data }),
+      clearPendingQuestion: () => set({ pendingQuestion: null }),
+
+      addTerminalLog: (log) =>
+        set((state) => {
+          if (state.terminalLogs.some((l) => l.id === log.id)) return state;
+          return { terminalLogs: [...state.terminalLogs, log] };
+        }),
       clearTerminalLogs: () => set({ terminalLogs: [], isProcessing: false, isPaused: false, jobId: null, pendingQuestion: null }),
       setBlurData: (data) => set({ blurData: data }),
       setJobId: (id) => set({ jobId: id }),
@@ -317,7 +336,11 @@ export const useAppStore = create<AppStore>()(
           trainingMetrics: [],
         }),
       stopTraining: () => set({ isTraining: false }),
-      addTrainingLog: (log) => set((state) => ({ trainingLogs: [...state.trainingLogs, log] })),
+      addTrainingLog: (log) =>
+        set((state) => {
+          if (state.trainingLogs.some((l) => l.id === log.id)) return state;
+          return { trainingLogs: [...state.trainingLogs, log] };
+        }),
       clearTrainingLogs: () => set({ trainingLogs: [], trainingMetrics: [], trainingRunId: null, isTraining: false }),
       appendTrainingMetric: (metric) =>
         set((state) => {

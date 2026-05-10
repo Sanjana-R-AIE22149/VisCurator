@@ -44,31 +44,36 @@ SOURCE AVAILABILITY:
 
 WORKFLOW — follow these steps in order:
 
-STEP 1: SEARCH
-Call search_datasets immediately with the user's query. Do not ask clarifying questions first unless
-the query is completely empty or nonsensical. "bean leaf disease", "cats and dogs", "mnist digits" are
-all clear enough — search right away.
+STEP 1: SEARCH FIRST — ALWAYS
+Call search_datasets IMMEDIATELY with the user's raw query.
+NEVER ask for clarification before searching.
+Even vague queries like "plants", "medical", "cars" should be searched first.
+The search system will handle query expansion automatically.
+Use sources=["huggingface"] always.
+
+If search returns 0 results:
+  - Try search_datasets again with a shorter version of the query (1-2 key words)
+  - If still 0, THEN ask one targeted clarifying question
+
+If search returns results but they seem off-topic:
+  - Still present them to the user — let the user judge relevance
+  - Add a note in your recommendation explaining what you found
+
+NEVER call ask_clarification as your first action.
+NEVER say "I couldn't find datasets" without trying at least 2 searches.
 
 STEP 2: PRESENT OPTIONS
-After searching, call present_dataset_options with the best 2-4 results from HuggingFace.
-Include dataset_id, name, source, description, size_estimate, url, pros, cons for each.
-This pauses the pipeline — the user will click to choose.
+After searching, call present_dataset_options with the top results.
+This pauses the pipeline. The user will select a dataset ID.
 
-STEP 3: AFTER USER SELECTS
-When the user replies with their selection (e.g. "I'll use option 1: beans from HuggingFace (dataset_id: AI-Lab-Makerere/beans)"):
-1. Call analyze_dataset_and_plan_processing with these hardcoded safe defaults since you may not have quality stats yet:
-   - blur_score=70.0, duplicate_percentage=5.0, class_balance="Balanced", dataset_size=1000
-   - resolution_stats={"avg_width": 224, "avg_height": 224, "median_kpx": 50}
-2. Then immediately call clean_and_augment_dataset with:
-   - dataset_id: exactly as given in the user's selection message
-   - source: "huggingface"
-   - label_column: "labels" (try this first — it works for most HF image datasets)
-   - image_column: "image"
-   - processing_plan: the result from step above
-   - target_size: the user's requested target size
+STEP 3: POST-SELECTION ANALYSIS (HEAVY)
+Only AFTER the user selects a specific dataset_id:
+1. Call estimate_dataset_quality (now that we have one target).
+2. Call analyze_dataset_and_plan_processing using the results from quality estimation.
+3. Call clean_and_augment_dataset with the final plan.
 
 STEP 4: SUMMARIZE
-After clean_and_augment_dataset completes, give a summary of what was done.
+Give a final report of the curated dataset.
 
 CRITICAL RULES:
 - ALWAYS call present_dataset_options before downloading.
@@ -287,6 +292,10 @@ class DatasetAgent:
         self._paused = False
         self._pause_reason: str | None = None
 
+    def update_emit_callback(self, emit: EmitFn) -> None:
+        """Update the callback used for streaming updates."""
+        self._emit = emit
+
     async def run(
         self,
         query: str,
@@ -304,10 +313,11 @@ class DatasetAgent:
             ))
         else:
             user_msg = (
-                f"Find me a curated computer-vision dataset for: {query}\n"
-                f"Target size: {target_size} images.\n"
-                f"Search HuggingFace now and show me the options."
+                f"Find datasets for: {query}\\n"
+                f"Target: {target_size} images.\\n"
+                f"Call search_datasets now with query={query!r} and sources=['huggingface']."
             )
+
             self._messages.append({"role": "user", "content": user_msg})
             await self._emit(PipelineMessage(
                 type=MessageType.LOG,
@@ -325,6 +335,7 @@ class DatasetAgent:
 
         while self._iteration < MAX_ITERATIONS:
             self._iteration += 1
+            logger.info("[ITERATION %d] Calling NIM for next step...", self._iteration)
 
             await self._emit(PipelineMessage(
                 type=MessageType.LOG,
@@ -339,7 +350,7 @@ class DatasetAgent:
                     stream=False,
                 )
             except Exception as exc:
-                logger.exception("LLM call failed at iteration %d", self._iteration)
+                logger.exception("[ERROR] LLM call failed at iteration %d", self._iteration)
                 await self._emit(PipelineMessage(
                     type=MessageType.DONE,
                     message=f"NIM API error: {exc}",
@@ -355,6 +366,7 @@ class DatasetAgent:
             # Show the thought (text outside tool_call blocks)
             clean = re.sub(r'<tool_call>.*?</tool_call>', '', content, flags=re.DOTALL).strip()
             if clean:
+                logger.info("[THOUGHT] Agent is thinking: %s", clean[:100] + "..." if len(clean) > 100 else clean)
                 await self._emit(PipelineMessage(
                     type=MessageType.THOUGHT,
                     message=clean,
@@ -362,6 +374,7 @@ class DatasetAgent:
                 ))
 
             if not tool_calls:
+                logger.info("[DONE] No more tool calls. Finalizing answer.")
                 final_answer = clean
                 break
 
@@ -376,6 +389,7 @@ class DatasetAgent:
                     if "target_size" not in fn_args:
                         fn_args["target_size"] = target_size
 
+                logger.info("[TOOL START] Executing tool: %s with args: %r", fn_name, fn_args)
                 await self._emit(PipelineMessage(
                     type=MessageType.TOOL_CALL,
                     message=f"→ {fn_name}",
@@ -383,6 +397,7 @@ class DatasetAgent:
                 ))
 
                 tool_result = await execute_tool(fn_name, fn_args)
+                logger.info("[TOOL END] Tool %s returned status: %s", fn_name, tool_result.get("status", "unknown"))
 
                 self._tool_results.append({
                     "tool": fn_name,
@@ -454,34 +469,22 @@ class DatasetAgent:
                         "tool_results": self._tool_results,
                     }
 
-                # After the tool result is emitted, build the message for the LLM
-                result_text = json.dumps(tool_result, default=str)
-                if len(result_text) > 6000:
-                    result_text = result_text[:6000] + "\n...(truncated)"
+                # Format result for LLM using the structured formatter
+                # (this replaces raw JSON truncation — _format_tool_result_for_llm
+                #  converts each tool result into compact readable text the LLM can parse)
+                llm_msg = _format_tool_result_for_llm(fn_name, tool_result)
+                self._messages.append({"role": "user", "content": llm_msg})
 
-                # For failed tools: inject error context so agent can reason about recovery
-                if tool_result.get("status") == "error" or tool_result.get("exit_code", 0) != 0:
-                    tail = tool_result.get("output_tail", [])
-                    error_context = (
-                        f"Tool '{fn_name}' FAILED.\n"
-                        f"Error: {tool_result.get('error', 'unknown')}\n"
-                        f"Last subprocess output: {chr(10).join(tail[-8:])}\n"
-                        f"Do not retry the same tool with the same arguments. "
-                        f"Try a different dataset, different parameters, or explain to the user what went wrong."
+                # Prompt the LLM to continue
+                self._messages.append({
+                    "role": "user",
+                    "content": (
+                        "Good. Continue with the next step of the workflow. "
+                        "If you need to call another tool, output a <tool_call> block now. "
+                        "If you are completely done with ALL steps (curation finished), "
+                        "write your final summary with no tool calls."
                     )
-                    self._messages.append({"role": "user", "content": error_context})
-                else:
-                    self._messages.append({
-                        "role": "user",
-                        "content": f"Tool '{fn_name}' result:\n{result_text}"
-                    })
-
-                # Always prompt to continue if not paused
-                if not self._paused:
-                    self._messages.append({
-                        "role": "user",
-                        "content": "Continue. What is your next action? If you are done, give a final summary."
-                    })
+                })
 
         if not final_answer and self._iteration >= MAX_ITERATIONS:
             try:

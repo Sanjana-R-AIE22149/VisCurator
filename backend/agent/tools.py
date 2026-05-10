@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 ToolFn = Callable[..., Coroutine[Any, Any, dict[str, Any]]]
 TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=45)
-_HEADERS = {"User-Agent": "VisCurator/1.0 (https://github.com/google-gemini/viscurator; contact@example.com)"}
+_SEARCH_TIMEOUT = aiohttp.ClientTimeout(total=15.0)  # HF API needs time
+_HEADERS = {"User-Agent": "VisCurator/1.0"}
 
 
 def _register(name: str, description: str, parameters: dict[str, Any], fn: ToolFn) -> None:
@@ -45,13 +46,17 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     entry = TOOL_REGISTRY.get(name)
     if entry is None:
         return {"status": "error", "error": f"Unknown tool '{name}'."}
+    
+    # Use longer timeout for heavy operations (clean/augment), 
+    # but tools.py functions should handle their own internal timeouts where specific.
+    tout = 300 if name == "clean_and_augment_dataset" else 120
     try:
-        result = await asyncio.wait_for(entry["function"](**arguments), timeout=120)
+        result = await asyncio.wait_for(entry["function"](**arguments), timeout=tout)
         return result
     except asyncio.TimeoutError:
-        return {"status": "error", "error": f"Tool '{name}' timed out."}
+        return {"status": "error", "error": f"Tool '{name}' timed out after {tout}s."}
     except Exception as exc:
-        logger.exception("Tool '%s' raised an exception", name)
+        logger.exception("Tool '%s' failed", name)
         return {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
 
 
@@ -59,220 +64,351 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # TOOL 1 — search_datasets  (multi-source)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _expand_query(query: str) -> list[str]:
+    """
+    Convert a user's natural language query into multiple targeted search 
+    terms that HuggingFace's API will actually return results for.
+    
+    HuggingFace search is keyword-based and case-insensitive, but:
+    - It matches against dataset ID, tags, and description
+    - Spaces work better than hyphens for multi-word searches  
+    - Short (1-2 word) queries return more results than long phrases
+    - Domain-specific synonyms matter a lot
+    
+    Returns a deduplicated list of queries, most specific first.
+    """
+    q = query.lower().strip()
+    words = q.split()
+    expansions: list[str] = []
+
+    # ── Domain synonym table ──────────────────────────────────
+    # Maps common user phrases → HuggingFace-friendly search terms
+    DOMAIN_MAP: dict[str, list[str]] = {
+        # Plant / agriculture
+        "apple leaf":         ["plant-disease", "apple disease", "leaf disease"],
+        "leaf disease":       ["plant-disease", "plant disease", "leaf"],
+        "plant disease":      ["plant-disease", "plant disease", "agriculture"],
+        "crop disease":       ["plant-disease", "agriculture", "crop"],
+        "apple scab":         ["plant-disease", "apple", "scab disease"],
+        "powdery mildew":     ["plant-disease", "mildew", "plant"],
+        "tomato disease":     ["plant-disease", "tomato", "tomato leaf"],
+        "rice disease":       ["plant-disease", "rice", "paddy"],
+        "wheat disease":      ["plant-disease", "wheat", "cereal"],
+        "corn disease":       ["plant-disease", "corn", "maize"],
+        "cassava":            ["plant-disease", "cassava", "agriculture"],
+
+        # Medical imaging
+        "chest xray":         ["chest-xray", "chest xray", "pneumonia", "medical"],
+        "xray":               ["xray", "chest-xray", "medical imaging"],
+        "mri":                ["mri", "brain mri", "medical imaging"],
+        "skin lesion":        ["skin-lesion", "skin disease", "dermatology", "isic"],
+        "skin cancer":        ["skin-lesion", "melanoma", "dermoscopy"],
+        "eye disease":        ["retinal", "fundus", "diabetic retinopathy", "eye"],
+        "retinal":            ["retinal", "fundus", "diabetic retinopathy"],
+        "cancer":             ["cancer", "tumor", "pathology", "histology"],
+        "brain tumor":        ["brain tumor", "brain mri", "mri segmentation"],
+        "pneumonia":          ["chest-xray", "pneumonia", "chest xray"],
+        "covid":              ["covid", "chest-xray", "covid-19"],
+
+        # Object detection / general CV
+        "object detection":   ["detection", "coco", "object-detection"],
+        "face detection":     ["face", "face detection", "facial"],
+        "face recognition":   ["face", "facial recognition", "lfw"],
+        "pedestrian":         ["pedestrian", "person detection", "crowd"],
+        "vehicle":            ["vehicle", "car detection", "traffic"],
+        "license plate":      ["license plate", "ocr", "vehicle"],
+        "traffic sign":       ["traffic", "sign detection", "road"],
+        "drone":              ["aerial", "drone", "uav", "satellite"],
+        "satellite":          ["satellite", "aerial", "remote sensing"],
+        "underwater":         ["underwater", "marine", "aquatic"],
+        "wildfire":           ["fire", "wildfire", "smoke detection"],
+        "garbage":            ["waste", "garbage", "trash", "recycling"],
+        "crack":              ["crack detection", "defect", "surface inspection"],
+        "weld":               ["welding", "defect", "industrial"],
+        "pcb":                ["pcb", "circuit board", "defect detection"],
+
+        # Animals
+        "cat dog":            ["cats-vs-dogs", "pet", "animal"],
+        "cats dogs":          ["cats-vs-dogs", "cat dog", "pet"],
+        "bird":               ["bird", "cub-200", "ornithology"],
+        "flower":             ["flower", "flowers102", "plant"],
+        "fruit":              ["fruit", "food", "grocery"],
+        "food":               ["food", "food101", "recipe"],
+        "dog breed":          ["stanford-dogs", "dog breed", "dog"],
+        "fish":               ["fish", "aquatic", "marine"],
+
+        # Text / document
+        "handwriting":        ["handwriting", "mnist", "handwritten"],
+        "digit":              ["mnist", "digit recognition", "handwritten"],
+        "mnist":              ["mnist", "digit", "handwritten"],
+        "document":           ["document", "ocr", "text detection"],
+        "invoice":            ["invoice", "document", "ocr"],
+
+        # Scene / classification
+        "scene":              ["scene", "places", "landscape"],
+        "indoor":             ["indoor", "scene", "room"],
+        "outdoor":            ["outdoor", "scene", "landscape"],
+        "weather":            ["weather", "fog", "rain", "snow"],
+        "nighttime":          ["nighttime", "night", "low light"],
+
+        # Specific well-known datasets (user might describe without knowing the name)
+        "imagenet":           ["imagenet", "image classification"],
+        "cifar":              ["cifar", "image classification"],
+        "fashion":            ["fashion-mnist", "clothing", "fashion"],
+        "emotion":            ["emotion", "facial expression", "fer"],
+        "gesture":            ["gesture", "hand gesture", "sign language"],
+        "pose":               ["pose", "human pose", "skeleton"],
+        "depth":              ["depth estimation", "depth", "stereo"],
+        "segmentation":       ["segmentation", "semantic segmentation", "mask"],
+    }
+
+    # 1. Check domain map for any matching phrase
+    for phrase, synonyms in DOMAIN_MAP.items():
+        if phrase in q:
+            expansions.extend(synonyms)
+            break  # one match is enough for domain routing
+
+    # 2. Always add the original query (lowercased, cleaned)
+    expansions.append(q)
+
+    # 3. Add hyphenated version (HF IDs often use hyphens)
+    hyphenated = "-".join(words)
+    if hyphenated != q:
+        expansions.append(hyphenated)
+
+    # 4. Add first two words (most specific without being too long)
+    if len(words) >= 2:
+        expansions.append(" ".join(words[:2]))
+
+    # 5. Add each individual content word (skip stopwords)
+    STOPWORDS = {"for", "in", "the", "a", "an", "of", "with", "and", "or",
+                 "to", "on", "at", "from", "by", "is", "are", "image",
+                 "images", "dataset", "data", "classification", "detection",
+                 "recognition", "model", "training", "deep", "learning"}
+    content_words = [w for w in words if w not in STOPWORDS and len(w) > 2]
+    expansions.extend(content_words)
+
+    # 6. Deduplicate preserving order
+    seen: set[str] = set()
+    result: list[str] = []
+    for e in expansions:
+        e = e.strip()
+        if e and e not in seen:
+            seen.add(e)
+            result.append(e)
+
+    logger.info("Query expansion: %r → %r", query, result)
+    return result
+
+
 async def _search_huggingface(query: str, max_results: int) -> list[dict[str, Any]]:
-    url = "https://huggingface.co/api/datasets"
-    params = {"search": query, "limit": min(max_results, 20), "sort": "likes", "direction": "-1", "full": "false"}
-    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
-        async with session.get(url, params=params) as resp:
-            if resp.status != 200:
-                return []
-            data = await resp.json()
-    results = []
-    for ds in data:
-        tags = ds.get("tags") or []
-        results.append({
-            "source": "HuggingFace",
-            "dataset_id": ds.get("id", ""),
-            "name": ds.get("id", "").split("/")[-1],
-            "description": (ds.get("description") or "")[:300],
-            "downloads": ds.get("downloads", 0),
-            "likes": ds.get("likes", 0),
-            "tags": tags[:10],
-            "url": f"https://huggingface.co/datasets/{ds.get('id', '')}",
-            "size_estimate": "unknown",
-        })
-    return results
+    """
+    Search HuggingFace with intelligent query expansion.
+    
+    Runs up to 4 expanded queries in parallel (not sequentially),
+    deduplicates by dataset_id, and scores results by relevance
+    to the original query before returning.
+    """
+    headers = {**_HEADERS}
+    hf_token = os.getenv("HF_TOKEN", "").strip()
+    if hf_token and hf_token not in ("", "optional_huggingface_token"):
+        headers["Authorization"] = f"Bearer {hf_token}"
 
+    expanded = _expand_query(query)
+    # Take at most 4 queries to keep latency under 15 seconds
+    queries_to_run = expanded[:4]
+    logger.info("HF parallel search: %r", queries_to_run)
 
-_KAGGLE_UNAVAILABLE = [{
-    "source": "Kaggle",
-    "dataset_id": "unavailable",
-    "name": "Kaggle search unavailable",
-    "description": "Set KAGGLE_USERNAME and KAGGLE_KEY in .env to enable Kaggle search. Get them at https://www.kaggle.com/account.",
-    "downloads": 0,
-    "likes": 0,
-    "tags": [],
-    "url": "https://www.kaggle.com/account",
-    "size_estimate": "unknown",
-    "unavailable": True,
-}]
+    async def _single_search(session: aiohttp.ClientSession, q: str) -> list[dict]:
+        results = []
+        for sort in ("downloads", "likes"):
+            params = {"search": q, "limit": max_results, "sort": sort, "direction": "-1"}
+            try:
+                async with session.get(
+                    "https://huggingface.co/api/datasets", 
+                    params=params
+                ) as resp:
+                    if resp.status != 200:
+                        continue
+                    data = await resp.json()
+                for ds in data:
+                    ds_id = ds.get("id", "")
+                    if not ds_id:
+                        continue
+                    results.append({
+                        "source": "HuggingFace",
+                        "dataset_id": ds_id,
+                        "name": ds_id.split("/")[-1],
+                        "description": (ds.get("description") or "")[:200],
+                        "downloads": ds.get("downloads", 0),
+                        "likes": ds.get("likes", 0),
+                        "tags": ds.get("tags", []),
+                        "url": f"https://huggingface.co/datasets/{ds_id}",
+                        "size_estimate": "metadata-only",
+                        "_search_query": q,  # track which query found this
+                    })
+                if results:
+                    break  # got results from this sort, no need to try other sort
+            except asyncio.TimeoutError:
+                logger.warning("HF timeout for q=%r sort=%r", q, sort)
+            except Exception as e:
+                logger.warning("HF error for q=%r: %s", q, e)
+        return results
+
+    async with aiohttp.ClientSession(timeout=_SEARCH_TIMEOUT, headers=headers) as session:
+        all_batches = await asyncio.gather(
+            *[_single_search(session, q) for q in queries_to_run],
+            return_exceptions=True,
+        )
+
+    # Merge and deduplicate
+    seen_ids: set[str] = set()
+    merged: list[dict] = []
+    for batch in all_batches:
+        if isinstance(batch, Exception):
+            continue
+        for ds in batch:
+            if ds["dataset_id"] not in seen_ids:
+                seen_ids.add(ds["dataset_id"])
+                merged.append(ds)
+
+    # Score by relevance to ORIGINAL query
+    q_words = set(query.lower().split())
+    def _relevance(ds: dict) -> float:
+        score = 0.0
+        ds_id_lower = ds["dataset_id"].lower()
+        desc_lower = (ds.get("description") or "").lower()
+        tags_lower = " ".join(ds.get("tags", [])).lower()
+        combined = ds_id_lower + " " + desc_lower + " " + tags_lower
+        # Word overlap with original query
+        for w in q_words:
+            if len(w) > 2 and w in combined:
+                score += 3.0
+        # Exact phrase match in ID is gold
+        if query.lower().replace(" ", "-") in ds_id_lower:
+            score += 10.0
+        if query.lower().replace(" ", "") in ds_id_lower.replace("-", "").replace("_", ""):
+            score += 8.0
+        # Popularity tiebreaker (small weight)
+        score += min(ds.get("downloads", 0) / 1_000_000, 2.0)
+        score += min(ds.get("likes", 0) / 1_000, 1.0)
+        return score
+
+    merged.sort(key=_relevance, reverse=True)
+    
+    # Remove internal tracking field before returning
+    for ds in merged:
+        ds.pop("_search_query", None)
+        ds.pop("tags", None)  # tags can be large, not needed downstream
+
+    logger.info("HF adaptive search for %r: %d unique results", query, len(merged))
+    return merged[:max_results]
 
 
 async def _search_kaggle(query: str, max_results: int) -> list[dict[str, Any]]:
-    """Search Kaggle datasets via the v1 API using HTTP Basic Auth."""
     username = os.getenv("KAGGLE_USERNAME", "").strip()
     key = os.getenv("KAGGLE_KEY", "").strip()
     if not username or not key:
-        return _KAGGLE_UNAVAILABLE
+        return []
 
     url = "https://www.kaggle.com/api/v1/datasets/list"
     params = {"search": query, "sortBy": "votes", "pageSize": min(max_results, 20)}
-    auth = aiohttp.BasicAuth(username, key)
     try:
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
-            async with session.get(url, params=params, auth=auth) as resp:
-                if resp.status == 401:
-                    logger.warning("Kaggle auth failed — check KAGGLE_USERNAME / KAGGLE_KEY")
-                    return _KAGGLE_UNAVAILABLE
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-    except Exception as exc:
-        logger.warning("Kaggle search error: %s", exc)
-        return []
-    results = []
-    for ds in data:
-        owner = ds.get("ownerUser", ds.get("creatorName", ""))
-        slug = ds.get("datasetSlug", ds.get("slug", ""))
-        results.append({
-            "source": "Kaggle",
-            "dataset_id": f"{owner}/{slug}",
-            "name": ds.get("title", slug),
-            "description": (ds.get("description") or ds.get("subtitle", ""))[:300],
-            "downloads": ds.get("downloadCount", 0),
-            "likes": ds.get("voteCount", 0),
-            "tags": [t.get("name", "") for t in (ds.get("tags") or [])[:8]],
-            "url": f"https://www.kaggle.com/datasets/{owner}/{slug}",
-            "size_estimate": f"{round(ds.get('totalBytes', 0) / 1e6, 1)} MB" if ds.get("totalBytes") else "unknown",
-        })
-    return results
-
-
-_ROBOFLOW_UNAVAILABLE = [{
-    "source": "Roboflow",
-    "dataset_id": "unavailable",
-    "name": "Roboflow search unavailable",
-    "description": "Set ROBOFLOW_API_KEY in .env to enable Roboflow Universe search. Get a free key at https://roboflow.com.",
-    "downloads": 0,
-    "likes": 0,
-    "tags": [],
-    "url": "https://roboflow.com",
-    "size_estimate": "unknown",
-    "unavailable": True,
-}]
-
-
-async def _search_roboflow(query: str, max_results: int) -> list[dict[str, Any]]:
-    """Search Roboflow Universe via the universeSearch API endpoint."""
-    rf_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
-    if not rf_key:
-        return _ROBOFLOW_UNAVAILABLE
-
-    url = "https://api.roboflow.com/universeSearch"
-    params = {"q": query, "limit": min(max_results, 20), "api_key": rf_key}
-    try:
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
+        async with aiohttp.ClientSession(timeout=_SEARCH_TIMEOUT, auth=aiohttp.BasicAuth(username, key)) as session:
             async with session.get(url, params=params) as resp:
-                if resp.status == 401:
-                    logger.warning("Roboflow auth failed — check ROBOFLOW_API_KEY")
-                    return _ROBOFLOW_UNAVAILABLE
-                if resp.status != 200:
-                    return []
+                if resp.status != 200: return []
                 data = await resp.json()
-    except Exception as exc:
-        logger.warning("Roboflow search error: %s", exc)
-        return []
-    results = []
-    for ds in (data.get("results") or data.get("datasets") or []):
-        workspace = ds.get("workspace", ds.get("workspaceName", ""))
-        project = ds.get("project", ds.get("projectName", ds.get("slug", "")))
-        results.append({
-            "source": "Roboflow",
-            "dataset_id": f"{workspace}/{project}",
-            "name": ds.get("name", project),
-            "description": (ds.get("description") or "")[:300],
-            "downloads": ds.get("images", 0),
-            "likes": ds.get("stars", 0),
-            "tags": ds.get("classes", [])[:10],
-            "url": f"https://universe.roboflow.com/{workspace}/{project}",
-            "size_estimate": f"{ds.get('images', 0):,} images",
-        })
-    return results
-
-
-async def _search_paperswithcode(query: str, max_results: int) -> list[dict[str, Any]]:
-    """Search Papers With Code datasets."""
-    url = "https://paperswithcode.com/api/v1/datasets/"
-    params = {"q": query, "page_size": min(max_results, 20)}
-    try:
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
-            async with session.get(url, params=params) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
+        results = []
+        for ds in data:
+            owner = ds.get("ownerUser", "")
+            slug = ds.get("datasetSlug", "")
+            results.append({
+                "source": "Kaggle",
+                "dataset_id": f"{owner}/{slug}",
+                "name": ds.get("title", slug),
+                "description": (ds.get("description") or "")[:200],
+                "downloads": ds.get("downloadCount", 0),
+                "likes": ds.get("voteCount", 0),
+                "url": f"https://www.kaggle.com/datasets/{owner}/{slug}",
+                "size_estimate": "metadata-only",
+            })
+        return results
     except Exception:
         return []
-    results = []
-    for ds in (data.get("results") or []):
-        results.append({
-            "source": "PapersWithCode",
-            "dataset_id": ds.get("name", ""),
-            "name": ds.get("name", ""),
-            "description": (ds.get("description") or "")[:300],
-            "downloads": ds.get("paper_count", 0),
-            "likes": ds.get("paper_count", 0),
-            "tags": [],
-            "url": ds.get("url", f"https://paperswithcode.com/dataset/{ds.get('name', '').lower().replace(' ', '-')}"),
-            "size_estimate": "unknown",
-        })
-    return results
 
 
 async def search_datasets(
     query: str,
-    sources: list[str] | None = None,
-    max_results_per_source: int = 5,
+    sources: Any = None,
+    max_results_per_source: Any = 5,
 ) -> dict[str, Any]:
-    """Search for datasets across multiple sources simultaneously."""
-    if sources is None:
-        sources = ["huggingface", "kaggle", "roboflow", "paperswithcode"]
+    """Search for datasets across multiple sources simultaneously with strict timeouts."""
+    start_time = asyncio.get_event_loop().time()
+    
+    # Robust type casting for LLM-provided arguments
+    try:
+        max_results = int(max_results_per_source)
+    except (ValueError, TypeError):
+        max_results = 8
+    max_results = max(max_results, 8)  # always fetch at least 8
 
-    logger.info("search_datasets  query=%r  sources=%r", query, sources)
+    if isinstance(sources, str):
+        try:
+            # Handle if LLM sends "['hf', 'kaggle']" or "huggingface"
+            import ast
+            parsed = ast.literal_eval(sources)
+            sources = parsed if isinstance(parsed, list) else [sources]
+        except Exception:
+            sources = [sources]
+    
+    if not isinstance(sources, list) or not sources:
+        sources = ["huggingface"]
+    
+    # Always include huggingface — it has the most datasets
+    sources_lower = [s.lower() for s in sources]
+    if "huggingface" not in sources_lower:
+        sources_lower = ["huggingface"] + sources_lower
+    sources = sources_lower
 
-    tasks = {}
+    logger.info("Search started: query=%r sources=%r max_results=%d", query, sources, max_results)
+
+    tasks = []
+    source_names = []
     if "huggingface" in sources:
-        tasks["huggingface"] = _search_huggingface(query, max_results_per_source)
+        tasks.append(_search_huggingface(query, max_results))
+        source_names.append("huggingface")
     if "kaggle" in sources:
-        tasks["kaggle"] = _search_kaggle(query, max_results_per_source)
-    if "roboflow" in sources:
-        tasks["roboflow"] = _search_roboflow(query, max_results_per_source)
-    if "paperswithcode" in sources:
-        tasks["paperswithcode"] = _search_paperswithcode(query, max_results_per_source)
+        tasks.append(_search_kaggle(query, max_results))
+        source_names.append("kaggle")
 
-    results_by_source = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    results_by_source = await asyncio.gather(*tasks, return_exceptions=True)
+    
     all_results = []
-    source_status: dict[str, str] = {}
-    for src, res in zip(tasks.keys(), results_by_source):
+    source_status = {}
+    
+    for src, res in zip(source_names, results_by_source):
         if isinstance(res, Exception):
-            source_status[src] = "error"
+            logger.error("%s search failed: %s", src, res)
+            source_status[src] = "failed"
         elif isinstance(res, list):
-            unavailable = res and res[0].get("unavailable")
-            if unavailable:
-                source_status[src] = "unavailable"
-            else:
-                source_status[src] = f"{len(res)} results"
-            # Include unavailable sentinel in results so agent can report it,
-            # but exclude from ranking
-            real = [r for r in res if not r.get("unavailable")]
-            all_results.extend(real)
-            if unavailable:
-                all_results.extend(res)  # append the single sentinel at the end
+            all_results.extend(res)
+            source_status[src] = f"ok ({len(res)})"
         else:
-            source_status[src] = "error"
+            source_status[src] = "empty"
 
-    # Rank real results by downloads+likes; sentinels stay at the end
-    real_results = [r for r in all_results if not r.get("unavailable")]
-    sentinel_results = [r for r in all_results if r.get("unavailable")]
-    real_results.sort(key=lambda x: x.get("downloads", 0) + x.get("likes", 0) * 5, reverse=True)
-    all_results = real_results + sentinel_results
+    all_results.sort(key=lambda x: x.get("downloads", 0) + x.get("likes", 0) * 5, reverse=True)
+    elapsed = asyncio.get_event_loop().time() - start_time
+    
+    logger.info("Search finished in %.2fs: %d results found. Status: %s", 
+                elapsed, len(all_results), source_status)
 
     return {
         "status": "success",
         "query": query,
-        "total_found": len(real_results),
-        "sources_searched": list(tasks.keys()),
+        "total_found": len(all_results),
+        "elapsed_time": round(elapsed, 3),
         "source_status": source_status,
-        "datasets": all_results,
+        "datasets": all_results[:15],
     }
 
 
@@ -306,7 +442,7 @@ _register(
 
 async def get_dataset_info(dataset_id: str, source: str = "huggingface") -> dict[str, Any]:
     """Retrieve detailed metadata for a specific dataset."""
-    logger.info("get_dataset_info  dataset_id=%r  source=%r", dataset_id, source)
+    logger.info("[STEP] get_dataset_info  dataset_id=%r  source=%r", dataset_id, source)
 
     if source == "huggingface":
         url = f"https://huggingface.co/api/datasets/{dataset_id}"
@@ -316,14 +452,18 @@ async def get_dataset_info(dataset_id: str, source: str = "huggingface") -> dict
             headers["Authorization"] = f"Bearer {hf_token}"
         headers.update(_HEADERS)
 
+        logger.info("[INFO] Fetching metadata from HuggingFace API...")
         async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 404:
+                    logger.warning("[FAIL] Dataset '%s' not found.", dataset_id)
                     return {"status": "error", "error": f"Dataset '{dataset_id}' not found."}
                 if resp.status != 200:
+                    logger.warning("[FAIL] HF metadata API returned HTTP %d", resp.status)
                     return {"status": "error", "error": f"HTTP {resp.status}"}
                 meta = await resp.json()
 
+            logger.info("[INFO] Fetching split/row information...")
             splits_info: dict[str, Any] = {}
             splits_url = f"https://datasets-server.huggingface.co/info?dataset={dataset_id}"
             try:
@@ -343,14 +483,17 @@ async def get_dataset_info(dataset_id: str, source: str = "huggingface") -> dict
                                 if isinstance(features_raw, dict):
                                     splits_info["_features"] = list(features_raw.keys())
                             break
+                    else:
+                        logger.warning("[INFO] datasets-server returned %d, proceeding with partial meta.", resp2.status)
             except Exception as exc:
-                logger.warning("Could not fetch splits for '%s': %s", dataset_id, exc)
+                logger.warning("[INFO] datasets-server info unavailable for '%s': %s", dataset_id, exc)
 
         features = splits_info.pop("_features", [])
         tags = meta.get("tags") or []
         card = meta.get("cardData") or {}
         total_bytes = sum(s.get("num_bytes", 0) for s in splits_info.values())
         total_rows = sum(s.get("num_rows", 0) for s in splits_info.values())
+        logger.info("[OK] Dataset info retrieved. Found %d features and %d total rows.", len(features), total_rows)
 
         return {
             "status": "success",
@@ -415,9 +558,14 @@ _register(
 # TOOL 3 — estimate_dataset_quality
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def estimate_dataset_quality(dataset_id: str, sample_size: int = 30) -> dict[str, Any]:
+async def estimate_dataset_quality(dataset_id: str, sample_size: Any = 30) -> dict[str, Any]:
     """Download a small sample from a HuggingFace dataset and estimate image quality."""
-    logger.info("estimate_dataset_quality  dataset_id=%r  sample_size=%d", dataset_id, sample_size)
+    try:
+        sample_size = int(sample_size)
+    except (ValueError, TypeError):
+        sample_size = 30
+
+    logger.info("[STEP] Starting quality estimation for %r (sample_size=%d)", dataset_id, sample_size)
 
     rows_url = (
         f"https://datasets-server.huggingface.co/rows"
@@ -431,19 +579,24 @@ async def estimate_dataset_quality(dataset_id: str, sample_size: int = 30) -> di
     headers.update(_HEADERS)
 
     payload = None
+    logger.info("[INFO] Fetching rows from datasets-server...")
     async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
         async with session.get(rows_url, headers=headers) as resp:
             if resp.status == 200:
                 payload = await resp.json()
+                logger.info("[INFO] Succeeded with 'default' config.")
             else:
+                logger.info("[INFO] 'default' config failed (HTTP %d), searching for other configs...", resp.status)
                 # Try to find the right config
                 info_url = f"https://datasets-server.huggingface.co/info?dataset={dataset_id}"
                 async with session.get(info_url, headers=headers) as info_resp:
                     if info_resp.status != 200:
+                        logger.warning("[FAIL] Cannot access dataset '%s' via datasets-server.", dataset_id)
                         return {"status": "error", "error": f"Cannot access dataset '{dataset_id}' via datasets-server."}
                     info_data = await info_resp.json()
                     ds_info = info_data.get("dataset_info") or {}
                     if not ds_info:
+                        logger.warning("[FAIL] No configs found for '%s'.", dataset_id)
                         return {"status": "error", "error": "No configs found."}
                     first_config = next(iter(ds_info))
                     splits = ds_info[first_config].get("splits") or {}
@@ -453,14 +606,19 @@ async def estimate_dataset_quality(dataset_id: str, sample_size: int = 30) -> di
                         f"?dataset={dataset_id}&config={first_config}&split={first_split}"
                         f"&offset=0&length={min(sample_size, 100)}"
                     )
+                    logger.info("[INFO] Retrying with config=%r split=%r", first_config, first_split)
                     async with session.get(rows_url2, headers=headers) as resp2:
                         if resp2.status != 200:
+                            logger.warning("[FAIL] Rows endpoint failed with config=%r", first_config)
                             return {"status": "error", "error": f"Rows endpoint failed: HTTP {resp2.status}."}
                         payload = await resp2.json()
 
     rows = (payload or {}).get("rows") or []
     if not rows:
+        logger.warning("[FAIL] No rows returned for '%s'.", dataset_id)
         return {"status": "error", "error": "No rows returned."}
+
+    logger.info("[INFO] Successfully retrieved %d rows. Analyzing image quality...", len(rows))
 
     image_urls: list[str] = []
     labels: list[str] = []
@@ -806,10 +964,20 @@ def _build_preprocess_script(
             ds = {"train": ds}
 
         output_processed = OUTPUT_DIR / DATASET_ID.replace("/", "_") / "processed"
+        output_samples = OUTPUT_DIR / DATASET_ID.replace("/", "_") / "samples"
+        
         if output_processed.exists():
             import shutil
             shutil.rmtree(output_processed)
+        if output_samples.exists():
+            import shutil
+            shutil.rmtree(output_samples)
+            
         output_processed.mkdir(parents=True, exist_ok=True)
+        output_samples.mkdir(parents=True, exist_ok=True)
+        (output_samples / "raw").mkdir(exist_ok=True)
+        (output_samples / "filtered").mkdir(exist_ok=True)
+        (output_samples / "processed").mkdir(exist_ok=True)
 
         before_counts = Counter()
         after_counts = Counter()
@@ -819,10 +987,12 @@ def _build_preprocess_script(
         accepted_records = []
         rejected_blur = 0
         rejected_dup = 0
+        
+        sample_maps = {{"raw": [], "filtered": [], "processed": []}}
 
         def row_generator():
             for split_name, split_ds in ds.items():
-                print(f"> split {{split_name}}: {{len(split_ds)}} rows", flush=True)
+                print("> split {{}}: {{}} rows".format(split_name, len(split_ds)), flush=True)
                 for r in split_ds:
                     yield r
 
@@ -832,6 +1002,7 @@ def _build_preprocess_script(
             img = ensure_rgb(row.get(IMAGE_COL))
             if img is None:
                 continue
+            
             label = str(row.get(LABEL_COL, "unknown"))
             before_counts[label] += 1
             blur_value = laplacian_var(img)
@@ -839,32 +1010,57 @@ def _build_preprocess_script(
             _thresh = BLUR_THRESHOLD_SMALL if (img.width < 128 or img.height < 128) else BLUR_THRESHOLD_LARGE
             is_blurry = blur_value < _thresh
             is_dup = img_hash in seen_hashes
+            
+            # Save Raw Samples
+            if len(sample_maps["raw"]) < 5:
+                fname = f"raw_{{idx:05d}}.jpg"
+                img.save(output_samples / "raw" / fname, "JPEG", quality=85)
+                sample_maps["raw"].append({{"url": f"samples/raw/{{fname}}", "label": label, "id": idx}})
+
             blur_scatter.append({{
                 "id": idx,
                 "laplacian": round(blur_value, 1),
                 "resolution": int((img.width * img.height) / 1000),
                 "accepted": not is_blurry and not is_dup,
             }})
-            if PLAN.get("needs_blur_filtering") and is_blurry:
-                rejected_blur += 1
+            
+            if (PLAN.get("needs_blur_filtering") and is_blurry) or (PLAN.get("needs_deduplication") and is_dup):
+                if PLAN.get("needs_blur_filtering") and is_blurry: rejected_blur += 1
+                if PLAN.get("needs_deduplication") and is_dup: rejected_dup += 1
+                
+                # Save Filtered Samples
+                if len(sample_maps["filtered"]) < 5:
+                    reason = "blurry" if is_blurry else "duplicate"
+                    fname = f"filtered_{{idx:05d}}.jpg"
+                    img.save(output_samples / "filtered" / fname, "JPEG", quality=85)
+                    sample_maps["filtered"].append({{"url": f"samples/filtered/{{fname}}", "label": label, "reason": reason, "id": idx}})
                 continue
-            if PLAN.get("needs_deduplication") and is_dup:
-                rejected_dup += 1
-                continue
+                
             seen_hashes.add(img_hash)
-            accepted_records.append((img, label))
+            accepted_records.append((img, label, idx))
 
         augmenter = build_augmenter()
         minority_target = max([count for count in before_counts.values()] or [0])
         minority_labels = {{label for label, count in before_counts.items() if count < minority_target}}
 
+
         export_total = 0
-        for sample_index, (img, label) in enumerate(accepted_records):
+        for sample_index, (img, label, original_idx) in enumerate(accepted_records):
             out_dir = output_processed / label
             out_dir.mkdir(parents=True, exist_ok=True)
             base_np = np.array(img)
-            resized = augmenter(image=base_np)["image"]
-            Image.fromarray(resized).save(out_dir / f"sample_{{sample_index:05d}}.jpg", "JPEG", quality=92)
+            res = augmenter(image=base_np)
+            resized = res["image"]
+            
+            save_name = f"sample_{{sample_index:05d}}.jpg"
+            Image.fromarray(resized).save(out_dir / save_name, "JPEG", quality=92)
+            
+            # Save Processed Samples
+            if len(sample_maps["processed"]) < 5:
+                fname = f"proc_{{sample_index:05d}}.jpg"
+                Image.fromarray(resized).save(output_samples / "processed" / fname, "JPEG", quality=85)
+                sample_maps["processed"].append({{"url": f"samples/processed/{{fname}}", "label": label, "id": original_idx}})
+            
             after_counts[label] += 1
             export_total += 1
 
@@ -879,6 +1075,7 @@ def _build_preprocess_script(
             "dataset_id": DATASET_ID,
             "output_dir": str(output_processed),
             "plan": PLAN,
+            "stage_samples": sample_maps,
             "before_stats": {{
                 "images": int(sum(before_counts.values())),
                 "class_distribution": dict(sorted(before_counts.items())),

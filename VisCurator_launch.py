@@ -318,8 +318,9 @@ def start_backend() -> subprocess.Popen:
 
     proc = subprocess.Popen(
         [
-            sys.executable, "-m", "uvicorn",
-            "backend.main:app",
+                    sys.executable, "-m", "uvicorn",
+                    "backend.main:app",
+                    "--loop", "asyncio",
             "--host", "127.0.0.1",
             "--port", "8000",
             "--reload",
@@ -476,6 +477,7 @@ def watch(backend: subprocess.Popen, frontend: subprocess.Popen) -> None:
                 [
                     sys.executable, "-m", "uvicorn",
                     "backend.main:app",
+                    "--loop", "asyncio",
                     "--host", "127.0.0.1",
                     "--port", "8000",
                     "--reload",
