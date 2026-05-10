@@ -36,6 +36,8 @@ coverage.xml
 !.env.example
 
 # ── Project-generated data & artefacts ──────────────────────
+imagenette2-320/
+imagenette2-320.tgz
 data/
 cvagent_output/
 *.db

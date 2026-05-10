@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 ToolFn = Callable[..., Coroutine[Any, Any, dict[str, Any]]]
 TOOL_REGISTRY: dict[str, dict[str, Any]] = {}
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=45)
+_HEADERS = {"User-Agent": "VisCurator/1.0 (https://github.com/google-gemini/viscurator; contact@example.com)"}
 
 
 def _register(name: str, description: str, parameters: dict[str, Any], fn: ToolFn) -> None:
@@ -61,7 +62,7 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 async def _search_huggingface(query: str, max_results: int) -> list[dict[str, Any]]:
     url = "https://huggingface.co/api/datasets"
     params = {"search": query, "limit": min(max_results, 20), "sort": "likes", "direction": "-1", "full": "false"}
-    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
+    async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
         async with session.get(url, params=params) as resp:
             if resp.status != 200:
                 return []
@@ -160,7 +161,7 @@ async def _search_roboflow(query: str, max_results: int) -> list[dict[str, Any]]
     url = "https://api.roboflow.com/universeSearch"
     params = {"q": query, "limit": min(max_results, 20), "api_key": rf_key}
     try:
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
+        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
             async with session.get(url, params=params) as resp:
                 if resp.status == 401:
                     logger.warning("Roboflow auth failed — check ROBOFLOW_API_KEY")
@@ -194,7 +195,7 @@ async def _search_paperswithcode(query: str, max_results: int) -> list[dict[str,
     url = "https://paperswithcode.com/api/v1/datasets/"
     params = {"q": query, "page_size": min(max_results, 20)}
     try:
-        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
+        async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT, headers=_HEADERS) as session:
             async with session.get(url, params=params) as resp:
                 if resp.status != 200:
                     return []
@@ -313,6 +314,7 @@ async def get_dataset_info(dataset_id: str, source: str = "huggingface") -> dict
         hf_token = os.getenv("HF_TOKEN")
         if hf_token and hf_token != "optional_huggingface_token":
             headers["Authorization"] = f"Bearer {hf_token}"
+        headers.update(_HEADERS)
 
         async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
             async with session.get(url, headers=headers) as resp:
@@ -426,6 +428,7 @@ async def estimate_dataset_quality(dataset_id: str, sample_size: int = 30) -> di
     hf_token = os.getenv("HF_TOKEN")
     if hf_token and hf_token != "optional_huggingface_token":
         headers["Authorization"] = f"Bearer {hf_token}"
+    headers.update(_HEADERS)
 
     payload = None
     async with aiohttp.ClientSession(timeout=_HTTP_TIMEOUT) as session:
@@ -708,9 +711,21 @@ def _build_preprocess_script(
     return textwrap.dedent(
         f"""\
         #!/usr/bin/env python3
+        # Fix HuggingFace datasets multiprocessing on Windows
+        import os, sys
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["DATASETS_VERBOSITY"] = "error"
+
+        import multiprocessing
+        try:
+            multiprocessing.set_start_method("spawn", force=True)
+        except RuntimeError:
+            pass
+
         import io
         import json
         import random
+        import threading
         from collections import Counter
         from pathlib import Path
 
@@ -728,7 +743,8 @@ def _build_preprocess_script(
         TARGET_SIZE = {target_size}
         PLAN = {json.dumps(plan)}
         RANDOM_SEED = 42
-        BLUR_THRESHOLD = 80.0
+        BLUR_THRESHOLD_LARGE = 80.0   # for images >= 128px
+        BLUR_THRESHOLD_SMALL = 8.0 
 
         random.seed(RANDOM_SEED)
         np.random.seed(RANDOM_SEED)
@@ -759,12 +775,35 @@ def _build_preprocess_script(
                 ops.append(A.ShiftScaleRotate(shift_limit=0.04, scale_limit=0.08, rotate_limit=8, border_mode=cv2.BORDER_REFLECT_101, p=1.0))
             return A.Compose(ops)
 
-        from datasets import load_dataset
-        ds = load_dataset(DATASET_ID, trust_remote_code=True)
-        all_rows = []
-        for split_name, split_ds in ds.items():
-            print(f"> split {{split_name}}: {{len(split_ds)}} rows", flush=True)
-            all_rows.extend(list(split_ds))
+        result_holder = {{}}
+        error_holder = {{}}
+
+        def _load():
+            try:
+                from datasets import load_dataset
+                result_holder["ds"] = load_dataset(
+                    DATASET_ID, 
+                    trust_remote_code=True, 
+                    num_proc=1,
+                    download_mode="reuse_cache_if_exists"
+                )
+            except Exception as e:
+                error_holder["err"] = str(e)
+
+        print(f"> Loading {{DATASET_ID}} from {{SOURCE}} ...")
+        t = threading.Thread(target=_load)
+        t.start()
+        t.join(timeout=300)  # 5 minute timeout
+        if t.is_alive():
+            print("ERR: Dataset download timed out after 5 minutes", file=sys.stderr)
+            sys.exit(1)
+        if "err" in error_holder:
+            print(f"ERR: {{error_holder['err']}}", file=sys.stderr)
+            sys.exit(1)
+        ds = result_holder["ds"]
+
+        if not isinstance(ds, dict):
+            ds = {"train": ds}
 
         output_processed = OUTPUT_DIR / DATASET_ID.replace("/", "_") / "processed"
         if output_processed.exists():
@@ -781,7 +820,13 @@ def _build_preprocess_script(
         rejected_blur = 0
         rejected_dup = 0
 
-        for idx, row in enumerate(all_rows):
+        def row_generator():
+            for split_name, split_ds in ds.items():
+                print(f"> split {{split_name}}: {{len(split_ds)}} rows", flush=True)
+                for r in split_ds:
+                    yield r
+
+        for idx, row in enumerate(row_generator()):
             if len(accepted_records) >= TARGET_SIZE:
                 break
             img = ensure_rgb(row.get(IMAGE_COL))
@@ -791,7 +836,8 @@ def _build_preprocess_script(
             before_counts[label] += 1
             blur_value = laplacian_var(img)
             img_hash = str(imagehash.dhash(img))
-            is_blurry = blur_value < BLUR_THRESHOLD
+            _thresh = BLUR_THRESHOLD_SMALL if (img.width < 128 or img.height < 128) else BLUR_THRESHOLD_LARGE
+            is_blurry = blur_value < _thresh
             is_dup = img_hash in seen_hashes
             blur_scatter.append({{
                 "id": idx,
@@ -890,7 +936,7 @@ async def clean_and_augment_dataset(
         target_size=target_size,
         plan=plan,
     )
-    script_dir = Path(output_dir).parent
+    script_dir = Path(output_dir)
     script_dir.mkdir(parents=True, exist_ok=True)
     script_path = script_dir / f"cvagent_preprocess_{dataset_id.replace('/', '_')}.py"
     script_path.write_text(script_code, encoding="utf-8")
@@ -930,7 +976,9 @@ async def clean_and_augment_dataset(
         await proc.wait()
         exit_code = proc.returncode or 0
     except Exception as exc:
-        err = f"Preprocessing subprocess failed: {exc}"
+        import traceback
+        err = f"Preprocessing subprocess failed: {exc}\n{traceback.format_exc()}"
+        logger.error(err)
         await _stream(f"> {err}")
         return {"status": "error", "error": err, "output_tail": output_lines[-40:]}
 
@@ -1099,7 +1147,18 @@ def _build_download_script(
     return textwrap.dedent(f"""\
         #!/usr/bin/env python3
         \"\"\"CVAgent auto-generated download script — {dataset_id} from {source}\"\"\"
-        import os, sys, io, math, shutil, hashlib, random
+        # Fix HuggingFace datasets multiprocessing on Windows
+        import os, sys
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["DATASETS_VERBOSITY"] = "error"
+
+        import multiprocessing
+        try:
+            multiprocessing.set_start_method("spawn", force=True)
+        except RuntimeError:
+            pass
+
+        import io, math, shutil, hashlib, random, json, threading
         from pathlib import Path
         from PIL import Image
         import numpy as np
@@ -1124,31 +1183,49 @@ def _build_download_script(
             diff = arr[:, 1:] > arr[:, :-1]
             return hashlib.md5(diff.tobytes()).hexdigest()
 
-        print(f"> Loading {{DATASET_ID}} from {{SOURCE}} ...")
-        try:
-            from datasets import load_dataset
-        except ImportError:
-            print("ERR: pip install datasets", file=sys.stderr)
-            sys.exit(1)
+        result_holder = {{}}
+        error_holder = {{}}
 
-        try:
-            ds = load_dataset(DATASET_ID, trust_remote_code=True)
-        except Exception as e:
-            print(f"ERR: Could not load dataset: {{e}}", file=sys.stderr)
+        def _load():
+            try:
+                from datasets import load_dataset
+                result_holder["ds"] = load_dataset(
+                    DATASET_ID, 
+                    trust_remote_code=True, 
+                    num_proc=1,
+                    download_mode="reuse_cache_if_exists"
+                )
+            except Exception as e:
+                error_holder["err"] = str(e)
+
+        print(f"> Loading {{DATASET_ID}} from {{SOURCE}} ...")
+        t = threading.Thread(target=_load)
+        t.start()
+        t.join(timeout=300)  # 5 minute timeout
+        if t.is_alive():
+            print("ERR: Dataset download timed out after 5 minutes", file=sys.stderr)
             sys.exit(1)
+        if "err" in error_holder:
+            print(f"ERR: {{error_holder['err']}}", file=sys.stderr)
+            sys.exit(1)
+        ds = result_holder["ds"]
+
+        if not isinstance(ds, dict):
+            ds = {"train": ds}
 
         print(f"> Splits: {{list(ds.keys())}}")
-        all_rows = []
-        for split_name, split_ds in ds.items():
-            all_rows.extend(list(split_ds))
-            print(f">   {{split_name}}: {{len(split_ds)}} rows")
-        print(f"> Pool size: {{len(all_rows)}} rows")
 
         print("> Filtering (blur + dedup) ...")
         accepted, rejected_blur, rejected_dup = [], 0, 0
         seen_hashes = set()
 
-        for i, row in enumerate(all_rows):
+        def row_generator():
+            for split_name, split_ds in ds.items():
+                print(f">   {{split_name}}: {{len(split_ds)}} rows")
+                for r in split_ds:
+                    yield r
+
+        for i, row in enumerate(row_generator()):
             if len(accepted) >= TARGET_SIZE:
                 break
             raw_img = row.get(IMAGE_COL)
@@ -1179,7 +1256,7 @@ def _build_download_script(
             accepted.append((img, label))
 
             if (i+1) % 500 == 0:
-                print(f">   Scanned {{i+1}}/{{len(all_rows)}} | accepted {{len(accepted)}} | blur {{rejected_blur}} | dup {{rejected_dup}}")
+                print(f">   Scanned {{i+1}} | accepted {{len(accepted)}} | blur {{rejected_blur}} | dup {{rejected_dup}}")
 
         print(f"> Filter done — accepted: {{len(accepted)}} | blur_rejected: {{rejected_blur}} | dup_rejected: {{rejected_dup}}")
 
@@ -1237,7 +1314,7 @@ async def generate_and_run_script(
         output_dir=output_dir, target_size=target_size, split_ratios=split_ratios,
     )
 
-    script_dir = Path(output_dir).parent
+    script_dir = Path(output_dir)
     script_dir.mkdir(parents=True, exist_ok=True)
     script_path = script_dir / f"cvagent_download_{dataset_id.replace('/', '_')}.py"
     script_path.write_text(script_code, encoding="utf-8")
@@ -1273,7 +1350,9 @@ async def generate_and_run_script(
         await proc.wait()
         exit_code = proc.returncode or 0
     except Exception as exc:
-        err = f"✖ Subprocess error: {exc}"
+        import traceback
+        err = f"✖ Subprocess error: {exc}\n{traceback.format_exc()}"
+        logger.error(err)
         await _stream(err)
         return {"status": "error", "error": err, "exit_code": -1, "output_tail": output_lines[-40:]}
 

@@ -352,7 +352,13 @@ export default function DatasetControls() {
       wsRef.current?.close();
       wsRef.current = connectPipelineWebSocket(
         jobId,
-        handleWsMessage,
+        (msg) => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          handleWsMessage(msg);
+        },
         (event) => {
           if (useAppStore.getState().isProcessing) {
             logCloseEvent(event, 'Pipeline connection closed while waiting for the next step.');
@@ -369,6 +375,32 @@ export default function DatasetControls() {
           });
         }
       );
+
+      // Heartbeat / Health check: send a ping and wait for first message
+      const timeoutRef = { current: setTimeout(() => {
+        addTerminalLog({
+          id: `ws-reply-timeout-${Date.now()}`,
+          timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
+          message: 'Agent taking longer than expected (30s). Still waiting — NIM API may be cold-starting. If this persists, check backend logs.',
+          status: 'warn',
+          msgType: 'log',
+        });
+        // Don't stopProcessing() here — just warn, keep waiting
+      }, 30000) };
+
+      const ws = wsRef.current;
+      if (ws) {
+        ws.onopen = () => {
+          addTerminalLog({
+            id: `ws-reply-open-${Date.now()}`,
+            timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
+            message: '> WebSocket re-connected — resuming agent...',
+            status: 'ok',
+            msgType: 'log',
+          });
+          ws.send(JSON.stringify({ type: 'ping' }));
+        };
+      }
     } catch (err) {
       addTerminalLog({
         id: `reply-error-${Date.now()}`,
@@ -438,7 +470,13 @@ export default function DatasetControls() {
 
       wsRef.current = connectPipelineWebSocket(
         job_id,
-        handleWsMessage,
+        (msg) => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          handleWsMessage(msg);
+        },
         (event) => {
           if (useAppStore.getState().isProcessing) {
             logCloseEvent(event);
@@ -455,6 +493,32 @@ export default function DatasetControls() {
           });
         }
       );
+
+      // Heartbeat / Health check: send a ping and wait for first message
+      const timeoutRef = { current: setTimeout(() => {
+        addTerminalLog({
+          id: `ws-timeout-${Date.now()}`,
+          timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
+          message: 'Agent taking longer than expected (30s). Still waiting — NIM API may be cold-starting. If this persists, check backend logs.',
+          status: 'warn',
+          msgType: 'log',
+        });
+        // Don't stopProcessing() here — just warn, keep waiting
+      }, 30000) };
+
+      const ws = wsRef.current;
+      if (ws) {
+        ws.onopen = () => {
+          addTerminalLog({
+            id: `ws-open-${Date.now()}`,
+            timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
+            message: '> WebSocket connected — agent is starting...',
+            status: 'ok',
+            msgType: 'log',
+          });
+          ws.send(JSON.stringify({ type: 'ping' }));
+        };
+      }
     } catch (err) {
       addTerminalLog({
         id: `err-${Date.now()}`,

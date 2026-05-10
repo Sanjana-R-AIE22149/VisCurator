@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -60,10 +60,21 @@ def _verify_user(username: str, password: str) -> dict[str, Any] | None:
 
 # ── Dependency ────────────────────────────────────────────────────────────────
 
-_oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+_oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
-def get_current_user(token: str = Depends(_oauth2)) -> dict[str, Any]:
+def get_current_user(
+    token_header: str | None = Depends(_oauth2),
+    token_query: str | None = Query(default=None, alias="token"),
+) -> dict[str, Any]:
+    token = token_header or token_query
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token.",
@@ -78,6 +89,21 @@ def get_current_user(token: str = Depends(_oauth2)) -> dict[str, Any]:
     if not user:
         raise exc
     return user
+
+
+async def get_ws_user(token: str | None = Query(default=None)) -> dict[str, Any] | None:
+    """WebSocket specific auth helper that doesn't raise HTTP exceptions."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, _SECRET, algorithms=[_ALGORITHM])
+        username: str = payload.get("sub", "")
+        user = _USERS.get(username)
+        if user:
+            return {"username": user["username"], "name": user["name"]}
+        return None
+    except JWTError:
+        return None
 
 # ── Router ────────────────────────────────────────────────────────────────────
 

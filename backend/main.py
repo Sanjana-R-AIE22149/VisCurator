@@ -10,6 +10,9 @@ import logging
 import os
 import site
 import sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -25,7 +28,7 @@ try:
 except ImportError:  # pragma: no cover - environment fallback
     def load_dotenv(*_args: Any, **_kwargs: Any) -> bool:
         return False
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -77,16 +80,38 @@ nim_client: NIMClient | None = None
 async def lifespan(app: FastAPI):
     global nim_client
     logger.info("Starting VisCurator backend …")
+    
+    # ── Diagnostic Banner ──────────────────────────────────────
+    print("\n" + "="*50)
+    print(" VISCURATOR BACKEND STARTUP DIAGNOSTICS")
+    print("="*50)
+    
     api_key = os.getenv("NVIDIA_API_KEY", "")
     if api_key and api_key not in ("your_key_here", ""):
         try:
             nim_client = NIMClient(api_key=api_key)
-            logger.info("NIM client initialised.")
+            print(f"✓ NIM Connected (API Key: {api_key[:8]}...)")
         except Exception as exc:
             logger.warning("NIM client init failed: %s", exc)
             nim_client = None
+            print(f"❌ NIM Connection Failed: {exc}")
     else:
         logger.warning("NVIDIA_API_KEY not set — agent features disabled.")
+        print("❌ NVIDIA_API_KEY MISSING")
+
+    print(f"\nEvent Loop: {type(asyncio.get_event_loop()).__name__}")
+    print("\nPackages:")
+    for pkg in ["datasets", "torch", "albumentations", "imagehash", "cv2", "PIL", "aiohttp"]:
+        status = "✓" if _check_pkg(pkg) else "❌"
+        print(f"  {status} {pkg}")
+    
+    print("\nEnv Vars:")
+    for var in ["HF_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY", "ROBOFLOW_API_KEY"]:
+        status = "set" if os.getenv(var) else "not set"
+        print(f"  {var}: {status}")
+    
+    print("="*50 + "\n")
+    # ──────────────────────────────────────────────────────────
 
     # Ensure output dir exists and is servable
     output_dir = Path("./cvagent_output")
@@ -121,16 +146,56 @@ app.mount("/data", StaticFiles(directory=str(output_dir), html=False), name="dat
 
 # ── Health ───────────────────────────────────────────────────
 
+def _check_pkg(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except ImportError:
+        return False
+
 @app.get("/api/health", tags=["system"])
 async def health_check() -> dict[str, Any]:
     return {
-        "status": "healthy",
-        "service": "viscurator-backend",
-        "version": app.version,
+        "backend": "online",
         "nim_connected": nim_client is not None,
+        "nim_model": "meta/llama-3.1-70b-instruct",
+        "nim_error": None if nim_client else ("NVIDIA_API_KEY not set" if not os.getenv("NVIDIA_API_KEY") else "NIM connection failed"),
+        "python_packages": {
+            "datasets": _check_pkg("datasets"),
+            "torch": _check_pkg("torch"),
+            "albumentations": _check_pkg("albumentations"),
+            "imagehash": _check_pkg("imagehash"),
+            "cv2": _check_pkg("cv2"),
+            "PIL": _check_pkg("PIL"),
+            "aiohttp": _check_pkg("aiohttp"),
+        },
+        "env_vars": {
+            "NVIDIA_API_KEY": "set" if os.getenv("NVIDIA_API_KEY") else "MISSING",
+            "HF_TOKEN": "set" if os.getenv("HF_TOKEN") else "not set (optional)",
+            "KAGGLE_USERNAME": "set" if os.getenv("KAGGLE_USERNAME") else "not set",
+            "KAGGLE_KEY": "set" if os.getenv("KAGGLE_KEY") else "not set",
+            "ROBOFLOW_API_KEY": "set" if os.getenv("ROBOFLOW_API_KEY") else "not set",
+        },
+        "output_dirs": {
+            "cvagent_output": str(Path("./cvagent_output").exists()),
+            "runs": str(Path("./runs").exists()),
+        },
         "active_jobs": len(jobs),
-        "timestamp": datetime.utcnow().isoformat(),
+        "websocket_path": "/ws/pipeline/{job_id}",
     }
+
+@app.get("/api/dataset/test-run", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def dataset_test_run() -> dict[str, Any]:
+    """Minimal end-to-end sanity check WITHOUT the agent."""
+    from backend.agent.tools import generate_and_run_script
+    
+    logger.info("Starting minimal pipeline test run...")
+    result = await generate_and_run_script(
+        dataset_id="ylecun/mnist",
+        target_size=10,
+        output_dir="./test_output"
+    )
+    return result
 
 
 # ── System Telemetry ──────────────────────────────────────────
@@ -609,13 +674,35 @@ async def builder_train_metrics(run_id: str) -> list[TrainingMetricPoint]:
 # ── WebSocket Pipeline ────────────────────────────────────────
 
 @app.websocket("/ws/pipeline/{job_id}")
-async def websocket_pipeline(websocket: WebSocket, job_id: UUID) -> None:
+async def websocket_pipeline(
+    websocket: WebSocket, 
+    job_id: UUID,
+    token: str | None = Query(default=None),
+) -> None:
+    from backend.auth import get_ws_user
     await websocket.accept()
-    logger.info("WebSocket connected — job %s", job_id)
+    logger.info("WS connected for job %s", job_id)
+
+    # Auth check
+    user = await get_ws_user(token)
+    if not user:
+        await websocket.send_json({
+            "type": MessageType.ERROR,
+            "message": "Authentication required. Token missing or invalid.",
+            "timestamp": datetime.utcnow().isoformat(),
+            "id": str(uuid4())
+        })
+        await websocket.close(code=4001)
+        return
 
     job = jobs.get(job_id)
     if job is None:
-        await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message=f"Job {job_id} not found.").ws_dict())
+        await websocket.send_json({
+            "type": MessageType.ERROR, 
+            "message": "Job not found — did you POST to /api/dataset/start first?", 
+            "timestamp": datetime.utcnow().isoformat(), 
+            "id": str(uuid4())
+        })
         await websocket.close(code=4004)
         return
 
@@ -689,8 +776,26 @@ async def websocket_pipeline(websocket: WebSocket, job_id: UUID) -> None:
 
 
 @app.websocket("/ws/train/{run_id}")
-async def websocket_train(websocket: WebSocket, run_id: str) -> None:
+async def websocket_train(
+    websocket: WebSocket, 
+    run_id: str,
+    token: str | None = Query(default=None),
+) -> None:
+    from backend.auth import get_ws_user
     await websocket.accept()
+
+    # Auth check
+    user = await get_ws_user(token)
+    if not user:
+        await websocket.send_json({
+            "type": MessageType.ERROR,
+            "message": "Authentication required. Token missing or invalid.",
+            "timestamp": datetime.utcnow().isoformat(),
+            "id": str(uuid4())
+        })
+        await websocket.close(code=4001)
+        return
+
     state = training_runs.get(run_id)
     if state is None and not get_training_metrics(run_id):
         await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message=f"Run {run_id} not found.").ws_dict())
