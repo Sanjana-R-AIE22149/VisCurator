@@ -1,0 +1,39 @@
+# ============================================================
+# VisCurator / CVAgent - Python Backend Dependencies
+# ============================================================
+
+# --- Web framework & server ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+
+# --- Configuration ---
+python-dotenv>=1.0.0
+
+# --- LLM / NVIDIA NIM ---
+openai>=1.30.0
+httpx>=0.27.0
+
+# --- Dataset sources ---
+datasets>=2.19.0
+huggingface-hub>=0.23.0
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# --- Image processing & analysis ---
+Pillow>=10.3.0
+imagehash>=4.3.1
+numpy>=1.26.0
+opencv-python-headless>=4.9.0
+torch>=2.3.0
+albumentations>=1.4.0
+transformers>=4.30.0
+
+# --- System telemetry ---
+psutil>=5.9.0
+# pynvml>=11.5.0  # optional: install for real NVIDIA GPU stats
+
+# --- Auth / uploads ---
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9
