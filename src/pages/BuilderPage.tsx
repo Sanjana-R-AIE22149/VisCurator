@@ -8,10 +8,12 @@ import {
   useReactFlow,
   ReactFlowProvider,
   type NodeTypes,
+  type EdgeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { useAppStore } from '../store/useAppStore';
+import { computeGraphShapes } from '../lib/shapes';
 import InputNode from '../components/builder/nodes/InputNode';
 import ConvBlock from '../components/builder/nodes/ConvBlock';
 import AttentionBlock from '../components/builder/nodes/AttentionBlock';
@@ -24,10 +26,13 @@ import OutputNode from '../components/builder/nodes/OutputNode';
 import ComponentPalette from '../components/builder/ComponentPalette';
 import CopilotPanel from '../components/builder/CopilotPanel';
 import TrainingTerminal from '../components/builder/TrainingTerminal';
+import DeletableEdge from '../components/builder/DeletableEdge';
 
 function BuilderCanvas() {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } = useAppStore();
   const { screenToFlowPosition, fitView } = useReactFlow();
+
+  const shapedNodes = useMemo(() => computeGraphShapes(nodes, edges), [nodes, edges]);
 
   const nodeTypes: NodeTypes = useMemo(
     () => ({
@@ -40,6 +45,13 @@ function BuilderCanvas() {
       batchNormNode: BatchNormNode,
       dropoutNode: DropoutNode,
       outputNode: OutputNode,
+    }),
+    []
+  );
+
+  const edgeTypes: EdgeTypes = useMemo(
+    () => ({
+      deletableEdge: DeletableEdge,
     }),
     []
   );
@@ -89,7 +101,7 @@ function BuilderCanvas() {
   return (
     <div className="flex-1 relative h-full">
       <ReactFlow
-        nodes={nodes}
+        nodes={shapedNodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -97,10 +109,12 @@ function BuilderCanvas() {
         onDrop={onDrop}
         onDragOver={onDragOver}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.4 }}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
+          type: 'deletableEdge',
           animated: true,
           style: { stroke: '#475569', strokeWidth: 2 },
         }}

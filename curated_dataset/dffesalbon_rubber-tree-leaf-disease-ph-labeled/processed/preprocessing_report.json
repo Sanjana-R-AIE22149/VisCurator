@@ -1,0 +1,1389 @@
+{
+  "dataset_id": "dffesalbon/rubber-tree-leaf-disease-ph-labeled",
+  "output_dir": "curated_dataset\\dffesalbon_rubber-tree-leaf-disease-ph-labeled\\processed",
+  "plan": {
+    "blur_filtering": true,
+    "deduplication": false,
+    "augmentation": true,
+    "augmentations": [
+      "resize_224",
+      "horizontal_flip",
+      "random_brightness_contrast",
+      "minority_class_oversampling"
+    ],
+    "needs_blur_filtering": true,
+    "needs_deduplication": false,
+    "needs_augmentation": true,
+    "recommended_augmentations": [
+      "resize_224",
+      "horizontal_flip",
+      "random_brightness_contrast",
+      "minority_class_oversampling"
+    ]
+  },
+  "stage_samples": {
+    "raw": [
+      {
+        "url": "samples/raw/raw_00000.jpg",
+        "label": "unknown",
+        "id": 0
+      },
+      {
+        "url": "samples/raw/raw_00001.jpg",
+        "label": "unknown",
+        "id": 1
+      },
+      {
+        "url": "samples/raw/raw_00002.jpg",
+        "label": "unknown",
+        "id": 2
+      },
+      {
+        "url": "samples/raw/raw_00003.jpg",
+        "label": "unknown",
+        "id": 3
+      },
+      {
+        "url": "samples/raw/raw_00004.jpg",
+        "label": "unknown",
+        "id": 4
+      },
+      {
+        "url": "samples/raw/raw_00005.jpg",
+        "label": "unknown",
+        "id": 5
+      },
+      {
+        "url": "samples/raw/raw_00006.jpg",
+        "label": "unknown",
+        "id": 6
+      },
+      {
+        "url": "samples/raw/raw_00007.jpg",
+        "label": "unknown",
+        "id": 7
+      }
+    ],
+    "filtered": [
+      {
+        "url": "samples/filtered/filtered_00000.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 0
+      },
+      {
+        "url": "samples/filtered/filtered_00001.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 1
+      },
+      {
+        "url": "samples/filtered/filtered_00002.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 2
+      },
+      {
+        "url": "samples/filtered/filtered_00005.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 5
+      },
+      {
+        "url": "samples/filtered/filtered_00006.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 6
+      },
+      {
+        "url": "samples/filtered/filtered_00007.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 7
+      },
+      {
+        "url": "samples/filtered/filtered_00010.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 10
+      },
+      {
+        "url": "samples/filtered/filtered_00011.jpg",
+        "label": "unknown",
+        "reason": "blurry",
+        "id": 11
+      }
+    ],
+    "processed": [
+      {
+        "url": "samples/processed/proc_00000.jpg",
+        "label": "unknown",
+        "id": 3
+      },
+      {
+        "url": "samples/processed/proc_00001.jpg",
+        "label": "unknown",
+        "id": 4
+      },
+      {
+        "url": "samples/processed/proc_00002.jpg",
+        "label": "unknown",
+        "id": 8
+      },
+      {
+        "url": "samples/processed/proc_00003.jpg",
+        "label": "unknown",
+        "id": 9
+      },
+      {
+        "url": "samples/processed/proc_00004.jpg",
+        "label": "unknown",
+        "id": 18
+      },
+      {
+        "url": "samples/processed/proc_00005.jpg",
+        "label": "unknown",
+        "id": 24
+      },
+      {
+        "url": "samples/processed/proc_00006.jpg",
+        "label": "unknown",
+        "id": 25
+      },
+      {
+        "url": "samples/processed/proc_00007.jpg",
+        "label": "unknown",
+        "id": 26
+      }
+    ]
+  },
+  "before_stats": {
+    "images": 455,
+    "class_distribution": {
+      "unknown": 455
+    }
+  },
+  "after_stats": {
+    "images": 200,
+    "class_distribution": {
+      "unknown": 200
+    },
+    "blur_filtered": 255,
+    "duplicates_removed": 0
+  },
+  "class_distribution": {
+    "unknown": 200
+  },
+  "augmentation_summary": {
+    "operations": [
+      "resize_224",
+      "horizontal_flip",
+      "random_brightness_contrast",
+      "minority_class_oversampling"
+    ],
+    "augmented_images": 0,
+    "synthetic_generation_recommended": false
+  },
+  "blur_scatter": [
+    {
+      "id": 0,
+      "laplacian": 39.7,
+      "resolution": 1322,
+      "accepted": false
+    },
+    {
+      "id": 1,
+      "laplacian": 42.9,
+      "resolution": 5822,
+      "accepted": false
+    },
+    {
+      "id": 2,
+      "laplacian": 68.1,
+      "resolution": 4758,
+      "accepted": false
+    },
+    {
+      "id": 3,
+      "laplacian": 175.9,
+      "resolution": 2702,
+      "accepted": true
+    },
+    {
+      "id": 4,
+      "laplacian": 87.4,
+      "resolution": 3838,
+      "accepted": true
+    },
+    {
+      "id": 5,
+      "laplacian": 70.5,
+      "resolution": 3768,
+      "accepted": false
+    },
+    {
+      "id": 6,
+      "laplacian": 56.0,
+      "resolution": 6387,
+      "accepted": false
+    },
+    {
+      "id": 7,
+      "laplacian": 30.7,
+      "resolution": 3726,
+      "accepted": false
+    },
+    {
+      "id": 8,
+      "laplacian": 83.0,
+      "resolution": 5154,
+      "accepted": true
+    },
+    {
+      "id": 9,
+      "laplacian": 95.5,
+      "resolution": 3075,
+      "accepted": true
+    },
+    {
+      "id": 10,
+      "laplacian": 28.5,
+      "resolution": 5651,
+      "accepted": false
+    },
+    {
+      "id": 11,
+      "laplacian": 15.7,
+      "resolution": 1961,
+      "accepted": false
+    },
+    {
+      "id": 12,
+      "laplacian": 15.7,
+      "resolution": 305,
+      "accepted": false
+    },
+    {
+      "id": 13,
+      "laplacian": 13.9,
+      "resolution": 4832,
+      "accepted": false
+    },
+    {
+      "id": 14,
+      "laplacian": 22.7,
+      "resolution": 1711,
+      "accepted": false
+    },
+    {
+      "id": 15,
+      "laplacian": 33.1,
+      "resolution": 483,
+      "accepted": false
+    },
+    {
+      "id": 16,
+      "laplacian": 31.9,
+      "resolution": 540,
+      "accepted": false
+    },
+    {
+      "id": 17,
+      "laplacian": 30.2,
+      "resolution": 525,
+      "accepted": false
+    },
+    {
+      "id": 18,
+      "laplacian": 126.8,
+      "resolution": 1067,
+      "accepted": true
+    },
+    {
+      "id": 19,
+      "laplacian": 74.0,
+      "resolution": 1566,
+      "accepted": false
+    },
+    {
+      "id": 20,
+      "laplacian": 79.1,
+      "resolution": 2470,
+      "accepted": false
+    },
+    {
+      "id": 21,
+      "laplacian": 75.7,
+      "resolution": 2796,
+      "accepted": false
+    },
+    {
+      "id": 22,
+      "laplacian": 43.5,
+      "resolution": 2572,
+      "accepted": false
+    },
+    {
+      "id": 23,
+      "laplacian": 64.6,
+      "resolution": 4568,
+      "accepted": false
+    },
+    {
+      "id": 24,
+      "laplacian": 133.2,
+      "resolution": 12192,
+      "accepted": true
+    },
+    {
+      "id": 25,
+      "laplacian": 92.4,
+      "resolution": 4890,
+      "accepted": true
+    },
+    {
+      "id": 26,
+      "laplacian": 93.6,
+      "resolution": 2113,
+      "accepted": true
+    },
+    {
+      "id": 27,
+      "laplacian": 37.7,
+      "resolution": 1264,
+      "accepted": false
+    },
+    {
+      "id": 28,
+      "laplacian": 74.3,
+      "resolution": 1335,
+      "accepted": false
+    },
+    {
+      "id": 29,
+      "laplacian": 80.1,
+      "resolution": 872,
+      "accepted": true
+    },
+    {
+      "id": 30,
+      "laplacian": 44.5,
+      "resolution": 1306,
+      "accepted": false
+    },
+    {
+      "id": 31,
+      "laplacian": 51.6,
+      "resolution": 1572,
+      "accepted": false
+    },
+    {
+      "id": 32,
+      "laplacian": 115.3,
+      "resolution": 710,
+      "accepted": true
+    },
+    {
+      "id": 33,
+      "laplacian": 48.9,
+      "resolution": 1872,
+      "accepted": false
+    },
+    {
+      "id": 34,
+      "laplacian": 116.2,
+      "resolution": 874,
+      "accepted": true
+    },
+    {
+      "id": 35,
+      "laplacian": 117.8,
+      "resolution": 770,
+      "accepted": true
+    },
+    {
+      "id": 36,
+      "laplacian": 121.4,
+      "resolution": 481,
+      "accepted": true
+    },
+    {
+      "id": 37,
+      "laplacian": 63.8,
+      "resolution": 947,
+      "accepted": false
+    },
+    {
+      "id": 38,
+      "laplacian": 92.8,
+      "resolution": 1500,
+      "accepted": true
+    },
+    {
+      "id": 39,
+      "laplacian": 79.5,
+      "resolution": 2487,
+      "accepted": false
+    },
+    {
+      "id": 40,
+      "laplacian": 202.1,
+      "resolution": 1958,
+      "accepted": true
+    },
+    {
+      "id": 41,
+      "laplacian": 104.5,
+      "resolution": 4504,
+      "accepted": true
+    },
+    {
+      "id": 42,
+      "laplacian": 145.9,
+      "resolution": 2198,
+      "accepted": true
+    },
+    {
+      "id": 43,
+      "laplacian": 185.0,
+      "resolution": 1575,
+      "accepted": true
+    },
+    {
+      "id": 44,
+      "laplacian": 59.5,
+      "resolution": 3701,
+      "accepted": false
+    },
+    {
+      "id": 45,
+      "laplacian": 64.7,
+      "resolution": 2178,
+      "accepted": false
+    },
+    {
+      "id": 46,
+      "laplacian": 47.5,
+      "resolution": 1856,
+      "accepted": false
+    },
+    {
+      "id": 47,
+      "laplacian": 46.8,
+      "resolution": 2715,
+      "accepted": false
+    },
+    {
+      "id": 48,
+      "laplacian": 60.1,
+      "resolution": 1973,
+      "accepted": false
+    },
+    {
+      "id": 49,
+      "laplacian": 65.0,
+      "resolution": 1032,
+      "accepted": false
+    },
+    {
+      "id": 50,
+      "laplacian": 77.1,
+      "resolution": 3977,
+      "accepted": false
+    },
+    {
+      "id": 51,
+      "laplacian": 61.8,
+      "resolution": 1074,
+      "accepted": false
+    },
+    {
+      "id": 52,
+      "laplacian": 73.3,
+      "resolution": 2681,
+      "accepted": false
+    },
+    {
+      "id": 53,
+      "laplacian": 65.3,
+      "resolution": 1208,
+      "accepted": false
+    },
+    {
+      "id": 54,
+      "laplacian": 77.7,
+      "resolution": 1486,
+      "accepted": false
+    },
+    {
+      "id": 55,
+      "laplacian": 69.8,
+      "resolution": 3740,
+      "accepted": false
+    },
+    {
+      "id": 56,
+      "laplacian": 75.9,
+      "resolution": 2901,
+      "accepted": false
+    },
+    {
+      "id": 57,
+      "laplacian": 58.0,
+      "resolution": 2053,
+      "accepted": false
+    },
+    {
+      "id": 58,
+      "laplacian": 42.1,
+      "resolution": 627,
+      "accepted": false
+    },
+    {
+      "id": 59,
+      "laplacian": 71.1,
+      "resolution": 3354,
+      "accepted": false
+    },
+    {
+      "id": 60,
+      "laplacian": 39.1,
+      "resolution": 6044,
+      "accepted": false
+    },
+    {
+      "id": 61,
+      "laplacian": 33.9,
+      "resolution": 2904,
+      "accepted": false
+    },
+    {
+      "id": 62,
+      "laplacian": 61.9,
+      "resolution": 1101,
+      "accepted": false
+    },
+    {
+      "id": 63,
+      "laplacian": 40.1,
+      "resolution": 548,
+      "accepted": false
+    },
+    {
+      "id": 64,
+      "laplacian": 26.2,
+      "resolution": 4871,
+      "accepted": false
+    },
+    {
+      "id": 65,
+      "laplacian": 40.3,
+      "resolution": 1275,
+      "accepted": false
+    },
+    {
+      "id": 66,
+      "laplacian": 31.7,
+      "resolution": 5396,
+      "accepted": false
+    },
+    {
+      "id": 67,
+      "laplacian": 54.1,
+      "resolution": 1997,
+      "accepted": false
+    },
+    {
+      "id": 68,
+      "laplacian": 77.7,
+      "resolution": 1288,
+      "accepted": false
+    },
+    {
+      "id": 69,
+      "laplacian": 63.5,
+      "resolution": 1882,
+      "accepted": false
+    },
+    {
+      "id": 70,
+      "laplacian": 73.8,
+      "resolution": 3430,
+      "accepted": false
+    },
+    {
+      "id": 71,
+      "laplacian": 72.0,
+      "resolution": 3692,
+      "accepted": false
+    },
+    {
+      "id": 72,
+      "laplacian": 106.7,
+      "resolution": 305,
+      "accepted": true
+    },
+    {
+      "id": 73,
+      "laplacian": 74.7,
+      "resolution": 820,
+      "accepted": false
+    },
+    {
+      "id": 74,
+      "laplacian": 63.5,
+      "resolution": 5478,
+      "accepted": false
+    },
+    {
+      "id": 75,
+      "laplacian": 50.2,
+      "resolution": 2296,
+      "accepted": false
+    },
+    {
+      "id": 76,
+      "laplacian": 88.0,
+      "resolution": 12192,
+      "accepted": true
+    },
+    {
+      "id": 77,
+      "laplacian": 279.7,
+      "resolution": 292,
+      "accepted": true
+    },
+    {
+      "id": 78,
+      "laplacian": 355.9,
+      "resolution": 148,
+      "accepted": true
+    },
+    {
+      "id": 79,
+      "laplacian": 110.5,
+      "resolution": 199,
+      "accepted": true
+    },
+    {
+      "id": 80,
+      "laplacian": 240.9,
+      "resolution": 263,
+      "accepted": true
+    },
+    {
+      "id": 81,
+      "laplacian": 622.7,
+      "resolution": 492,
+      "accepted": true
+    },
+    {
+      "id": 82,
+      "laplacian": 790.3,
+      "resolution": 542,
+      "accepted": true
+    },
+    {
+      "id": 83,
+      "laplacian": 419.2,
+      "resolution": 377,
+      "accepted": true
+    },
+    {
+      "id": 84,
+      "laplacian": 940.5,
+      "resolution": 509,
+      "accepted": true
+    },
+    {
+      "id": 85,
+      "laplacian": 111.0,
+      "resolution": 751,
+      "accepted": true
+    },
+    {
+      "id": 86,
+      "laplacian": 209.2,
+      "resolution": 1153,
+      "accepted": true
+    },
+    {
+      "id": 87,
+      "laplacian": 116.9,
+      "resolution": 2066,
+      "accepted": true
+    },
+    {
+      "id": 88,
+      "laplacian": 142.8,
+      "resolution": 2465,
+      "accepted": true
+    },
+    {
+      "id": 89,
+      "laplacian": 156.5,
+      "resolution": 250,
+      "accepted": true
+    },
+    {
+      "id": 90,
+      "laplacian": 151.9,
+      "resolution": 363,
+      "accepted": true
+    },
+    {
+      "id": 91,
+      "laplacian": 437.2,
+      "resolution": 427,
+      "accepted": true
+    },
+    {
+      "id": 92,
+      "laplacian": 191.1,
+      "resolution": 491,
+      "accepted": true
+    },
+    {
+      "id": 93,
+      "laplacian": 88.1,
+      "resolution": 2224,
+      "accepted": true
+    },
+    {
+      "id": 94,
+      "laplacian": 68.3,
+      "resolution": 827,
+      "accepted": false
+    },
+    {
+      "id": 95,
+      "laplacian": 124.6,
+      "resolution": 2218,
+      "accepted": true
+    },
+    {
+      "id": 96,
+      "laplacian": 86.7,
+      "resolution": 584,
+      "accepted": true
+    },
+    {
+      "id": 97,
+      "laplacian": 63.6,
+      "resolution": 1815,
+      "accepted": false
+    },
+    {
+      "id": 98,
+      "laplacian": 87.7,
+      "resolution": 724,
+      "accepted": true
+    },
+    {
+      "id": 99,
+      "laplacian": 155.0,
+      "resolution": 1776,
+      "accepted": true
+    },
+    {
+      "id": 100,
+      "laplacian": 130.0,
+      "resolution": 3203,
+      "accepted": true
+    },
+    {
+      "id": 101,
+      "laplacian": 104.7,
+      "resolution": 1561,
+      "accepted": true
+    },
+    {
+      "id": 102,
+      "laplacian": 60.8,
+      "resolution": 4473,
+      "accepted": false
+    },
+    {
+      "id": 103,
+      "laplacian": 36.6,
+      "resolution": 4425,
+      "accepted": false
+    },
+    {
+      "id": 104,
+      "laplacian": 33.9,
+      "resolution": 634,
+      "accepted": false
+    },
+    {
+      "id": 105,
+      "laplacian": 35.1,
+      "resolution": 1424,
+      "accepted": false
+    },
+    {
+      "id": 106,
+      "laplacian": 43.5,
+      "resolution": 1246,
+      "accepted": false
+    },
+    {
+      "id": 107,
+      "laplacian": 33.1,
+      "resolution": 1092,
+      "accepted": false
+    },
+    {
+      "id": 108,
+      "laplacian": 21.2,
+      "resolution": 738,
+      "accepted": false
+    },
+    {
+      "id": 109,
+      "laplacian": 30.3,
+      "resolution": 5472,
+      "accepted": false
+    },
+    {
+      "id": 110,
+      "laplacian": 29.6,
+      "resolution": 3289,
+      "accepted": false
+    },
+    {
+      "id": 111,
+      "laplacian": 53.8,
+      "resolution": 5516,
+      "accepted": false
+    },
+    {
+      "id": 112,
+      "laplacian": 52.6,
+      "resolution": 1512,
+      "accepted": false
+    },
+    {
+      "id": 113,
+      "laplacian": 30.3,
+      "resolution": 6117,
+      "accepted": false
+    },
+    {
+      "id": 114,
+      "laplacian": 38.2,
+      "resolution": 12192,
+      "accepted": false
+    },
+    {
+      "id": 115,
+      "laplacian": 30.6,
+      "resolution": 1787,
+      "accepted": false
+    },
+    {
+      "id": 116,
+      "laplacian": 28.4,
+      "resolution": 2288,
+      "accepted": false
+    },
+    {
+      "id": 117,
+      "laplacian": 33.0,
+      "resolution": 1825,
+      "accepted": false
+    },
+    {
+      "id": 118,
+      "laplacian": 40.1,
+      "resolution": 1723,
+      "accepted": false
+    },
+    {
+      "id": 119,
+      "laplacian": 53.4,
+      "resolution": 1569,
+      "accepted": false
+    },
+    {
+      "id": 120,
+      "laplacian": 71.4,
+      "resolution": 798,
+      "accepted": false
+    },
+    {
+      "id": 121,
+      "laplacian": 36.4,
+      "resolution": 3669,
+      "accepted": false
+    },
+    {
+      "id": 122,
+      "laplacian": 46.8,
+      "resolution": 1317,
+      "accepted": false
+    },
+    {
+      "id": 123,
+      "laplacian": 58.2,
+      "resolution": 2066,
+      "accepted": false
+    },
+    {
+      "id": 124,
+      "laplacian": 32.3,
+      "resolution": 3405,
+      "accepted": false
+    },
+    {
+      "id": 125,
+      "laplacian": 78.3,
+      "resolution": 2076,
+      "accepted": false
+    },
+    {
+      "id": 126,
+      "laplacian": 38.5,
+      "resolution": 4415,
+      "accepted": false
+    },
+    {
+      "id": 127,
+      "laplacian": 76.0,
+      "resolution": 712,
+      "accepted": false
+    },
+    {
+      "id": 128,
+      "laplacian": 51.2,
+      "resolution": 2663,
+      "accepted": false
+    },
+    {
+      "id": 129,
+      "laplacian": 64.0,
+      "resolution": 2350,
+      "accepted": false
+    },
+    {
+      "id": 130,
+      "laplacian": 33.4,
+      "resolution": 5908,
+      "accepted": false
+    },
+    {
+      "id": 131,
+      "laplacian": 41.4,
+      "resolution": 2806,
+      "accepted": false
+    },
+    {
+      "id": 132,
+      "laplacian": 26.0,
+      "resolution": 2297,
+      "accepted": false
+    },
+    {
+      "id": 133,
+      "laplacian": 32.9,
+      "resolution": 1304,
+      "accepted": false
+    },
+    {
+      "id": 134,
+      "laplacian": 33.5,
+      "resolution": 2639,
+      "accepted": false
+    },
+    {
+      "id": 135,
+      "laplacian": 32.6,
+      "resolution": 2936,
+      "accepted": false
+    },
+    {
+      "id": 136,
+      "laplacian": 35.0,
+      "resolution": 2208,
+      "accepted": false
+    },
+    {
+      "id": 137,
+      "laplacian": 47.5,
+      "resolution": 1872,
+      "accepted": false
+    },
+    {
+      "id": 138,
+      "laplacian": 49.9,
+      "resolution": 4845,
+      "accepted": false
+    },
+    {
+      "id": 139,
+      "laplacian": 40.2,
+      "resolution": 4782,
+      "accepted": false
+    },
+    {
+      "id": 140,
+      "laplacian": 34.1,
+      "resolution": 3552,
+      "accepted": false
+    },
+    {
+      "id": 141,
+      "laplacian": 42.4,
+      "resolution": 765,
+      "accepted": false
+    },
+    {
+      "id": 142,
+      "laplacian": 63.0,
+      "resolution": 1464,
+      "accepted": false
+    },
+    {
+      "id": 143,
+      "laplacian": 41.9,
+      "resolution": 1583,
+      "accepted": false
+    },
+    {
+      "id": 144,
+      "laplacian": 52.8,
+      "resolution": 2072,
+      "accepted": false
+    },
+    {
+      "id": 145,
+      "laplacian": 57.5,
+      "resolution": 2229,
+      "accepted": false
+    },
+    {
+      "id": 146,
+      "laplacian": 28.9,
+      "resolution": 1971,
+      "accepted": false
+    },
+    {
+      "id": 147,
+      "laplacian": 42.5,
+      "resolution": 1569,
+      "accepted": false
+    },
+    {
+      "id": 148,
+      "laplacian": 34.8,
+      "resolution": 974,
+      "accepted": false
+    },
+    {
+      "id": 149,
+      "laplacian": 43.7,
+      "resolution": 1557,
+      "accepted": false
+    },
+    {
+      "id": 150,
+      "laplacian": 35.5,
+      "resolution": 1604,
+      "accepted": false
+    },
+    {
+      "id": 151,
+      "laplacian": 35.3,
+      "resolution": 6059,
+      "accepted": false
+    },
+    {
+      "id": 152,
+      "laplacian": 36.3,
+      "resolution": 1420,
+      "accepted": false
+    },
+    {
+      "id": 153,
+      "laplacian": 48.4,
+      "resolution": 2631,
+      "accepted": false
+    },
+    {
+      "id": 154,
+      "laplacian": 35.7,
+      "resolution": 7046,
+      "accepted": false
+    },
+    {
+      "id": 155,
+      "laplacian": 39.9,
+      "resolution": 1187,
+      "accepted": false
+    },
+    {
+      "id": 156,
+      "laplacian": 1471.2,
+      "resolution": 12192,
+      "accepted": true
+    },
+    {
+      "id": 157,
+      "laplacian": 68.2,
+      "resolution": 12192,
+      "accepted": false
+    },
+    {
+      "id": 158,
+      "laplacian": 50.8,
+      "resolution": 1049,
+      "accepted": false
+    },
+    {
+      "id": 159,
+      "laplacian": 30.3,
+      "resolution": 2602,
+      "accepted": false
+    },
+    {
+      "id": 160,
+      "laplacian": 54.3,
+      "resolution": 1544,
+      "accepted": false
+    },
+    {
+      "id": 161,
+      "laplacian": 64.5,
+      "resolution": 1961,
+      "accepted": false
+    },
+    {
+      "id": 162,
+      "laplacian": 53.9,
+      "resolution": 4460,
+      "accepted": false
+    },
+    {
+      "id": 163,
+      "laplacian": 29.8,
+      "resolution": 3784,
+      "accepted": false
+    },
+    {
+      "id": 164,
+      "laplacian": 29.1,
+      "resolution": 947,
+      "accepted": false
+    },
+    {
+      "id": 165,
+      "laplacian": 50.4,
+      "resolution": 1459,
+      "accepted": false
+    },
+    {
+      "id": 166,
+      "laplacian": 22.7,
+      "resolution": 5128,
+      "accepted": false
+    },
+    {
+      "id": 167,
+      "laplacian": 58.1,
+      "resolution": 1647,
+      "accepted": false
+    },
+    {
+      "id": 168,
+      "laplacian": 29.2,
+      "resolution": 4797,
+      "accepted": false
+    },
+    {
+      "id": 169,
+      "laplacian": 23.4,
+      "resolution": 2032,
+      "accepted": false
+    },
+    {
+      "id": 170,
+      "laplacian": 21.5,
+      "resolution": 1436,
+      "accepted": false
+    },
+    {
+      "id": 171,
+      "laplacian": 20.5,
+      "resolution": 1772,
+      "accepted": false
+    },
+    {
+      "id": 172,
+      "laplacian": 71.5,
+      "resolution": 853,
+      "accepted": false
+    },
+    {
+      "id": 173,
+      "laplacian": 28.1,
+      "resolution": 3000,
+      "accepted": false
+    },
+    {
+      "id": 174,
+      "laplacian": 26.8,
+      "resolution": 4747,
+      "accepted": false
+    },
+    {
+      "id": 175,
+      "laplacian": 45.3,
+      "resolution": 3244,
+      "accepted": false
+    },
+    {
+      "id": 176,
+      "laplacian": 60.7,
+      "resolution": 2245,
+      "accepted": false
+    },
+    {
+      "id": 177,
+      "laplacian": 77.5,
+      "resolution": 4338,
+      "accepted": false
+    },
+    {
+      "id": 178,
+      "laplacian": 49.9,
+      "resolution": 6117,
+      "accepted": false
+    },
+    {
+      "id": 179,
+      "laplacian": 40.4,
+      "resolution": 717,
+      "accepted": false
+    },
+    {
+      "id": 180,
+      "laplacian": 45.0,
+      "resolution": 2609,
+      "accepted": false
+    },
+    {
+      "id": 181,
+      "laplacian": 68.0,
+      "resolution": 2543,
+      "accepted": false
+    },
+    {
+      "id": 182,
+      "laplacian": 35.1,
+      "resolution": 1441,
+      "accepted": false
+    },
+    {
+      "id": 183,
+      "laplacian": 33.1,
+      "resolution": 2242,
+      "accepted": false
+    },
+    {
+      "id": 184,
+      "laplacian": 20.3,
+      "resolution": 6690,
+      "accepted": false
+    },
+    {
+      "id": 185,
+      "laplacian": 16.9,
+      "resolution": 1445,
+      "accepted": false
+    },
+    {
+      "id": 186,
+      "laplacian": 47.1,
+      "resolution": 1709,
+      "accepted": false
+    },
+    {
+      "id": 187,
+      "laplacian": 50.5,
+      "resolution": 1714,
+      "accepted": false
+    },
+    {
+      "id": 188,
+      "laplacian": 44.2,
+      "resolution": 3586,
+      "accepted": false
+    },
+    {
+      "id": 189,
+      "laplacian": 57.2,
+      "resolution": 2193,
+      "accepted": false
+    },
+    {
+      "id": 190,
+      "laplacian": 30.7,
+      "resolution": 8807,
+      "accepted": false
+    },
+    {
+      "id": 191,
+      "laplacian": 26.3,
+      "resolution": 1106,
+      "accepted": false
+    },
+    {
+      "id": 192,
+      "laplacian": 26.7,
+      "resolution": 3416,
+      "accepted": false
+    },
+    {
+      "id": 193,
+      "laplacian": 26.7,
+      "resolution": 1831,
+      "accepted": false
+    },
+    {
+      "id": 194,
+      "laplacian": 1543.2,
+      "resolution": 12192,
+      "accepted": true
+    },
+    {
+      "id": 195,
+      "laplacian": 20.5,
+      "resolution": 2662,
+      "accepted": false
+    },
+    {
+      "id": 196,
+      "laplacian": 32.5,
+      "resolution": 1566,
+      "accepted": false
+    },
+    {
+      "id": 197,
+      "laplacian": 43.7,
+      "resolution": 391,
+      "accepted": false
+    },
+    {
+      "id": 198,
+      "laplacian": 37.2,
+      "resolution": 2036,
+      "accepted": false
+    },
+    {
+      "id": 199,
+      "laplacian": 71.0,
+      "resolution": 6470,
+      "accepted": false
+    }
+  ]
+}

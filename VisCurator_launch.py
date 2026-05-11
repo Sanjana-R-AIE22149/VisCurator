@@ -323,8 +323,6 @@ def start_backend() -> subprocess.Popen:
                     "--loop", "asyncio",
             "--host", "127.0.0.1",
             "--port", "8000",
-            "--reload",
-            "--reload-dir", str(BACKEND_DIR),
             "--log-level", "warning",   # quieter — errors still show
         ],
         cwd=str(ROOT),
@@ -480,8 +478,6 @@ def watch(backend: subprocess.Popen, frontend: subprocess.Popen) -> None:
                     "--loop", "asyncio",
                     "--host", "127.0.0.1",
                     "--port", "8000",
-                    "--reload",
-                    "--reload-dir", str(BACKEND_DIR),
                     "--log-level", "warning",
                 ],
                 cwd=str(ROOT),

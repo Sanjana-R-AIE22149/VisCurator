@@ -251,6 +251,26 @@ export default function DatasetControls() {
   };
 
   const handleToolResult = (data: Record<string, unknown>) => {
+    if (data.live_sample && typeof data.live_sample === 'object') {
+      const { stage, sample } = data.live_sample as any;
+      const currentReport = useAppStore.getState().preprocessingReport || { 
+        dataset_id: datasetQuery, 
+        stage_samples: { raw: [], filtered: [], processed: [] } 
+      };
+      const stageSamples = { ...(currentReport.stage_samples || { raw: [], filtered: [], processed: [] }) };
+      
+      if (!stageSamples[stage as keyof typeof stageSamples]) {
+        (stageSamples as any)[stage] = [];
+      }
+      
+      // Avoid duplicates
+      if (!stageSamples[stage as keyof typeof stageSamples].some((s: any) => s.id === sample.id)) {
+        stageSamples[stage as keyof typeof stageSamples] = [...stageSamples[stage as keyof typeof stageSamples], sample].slice(-8);
+        setPreprocessingReport({ ...currentReport, stage_samples: stageSamples });
+      }
+      return;
+    }
+
     if (typeof data.quality_score === 'number') {
       setQualityScore(data.quality_score as number);
       setImagesIngested((data.images_sampled as number | null) ?? null);
@@ -320,11 +340,37 @@ export default function DatasetControls() {
         }
         setPaused(true, question);
       } else {
-        stopProcessing();
+        // ── Extract preprocessing_report from completed job ──────────────
+        // Check 1: direct field on done data
+        if (data?.preprocessing_report && typeof data.preprocessing_report === 'object') {
+          const report = data.preprocessing_report as PreprocessingReport;
+          setPreprocessingReport(report);
+          if (typeof report.after_stats?.images === 'number') setImagesIngested(report.after_stats.images);
+        }
+        // Check 2: scan through tool_results for clean_and_augment result
         if (data?.tool_results && Array.isArray(data.tool_results)) {
           setDatasetResults(data.tool_results as any[]);
+          for (const tr of data.tool_results as any[]) {
+            if (tr?.tool === 'clean_and_augment_dataset') {
+              const report = tr?.result?.preprocessing_report;
+              if (report && typeof report === 'object') {
+                setPreprocessingReport(report as PreprocessingReport);
+                if (typeof report.after_stats?.images === 'number') setImagesIngested(report.after_stats.images);
+                if (report.class_distribution) {
+                  const counts = Object.values(report.class_distribution) as number[];
+                  const mx = Math.max(...counts, 0);
+                  const mn = Math.min(...counts, mx || 0);
+                  setClassBalance(mx > 0 && mn > 0 ? (mx / mn <= 1.35 ? 'Balanced' : mx / mn <= 2.25 ? 'Moderately Imbalanced' : 'Highly Imbalanced') : 'Unknown');
+                }
+              }
+              break;
+            }
+          }
         }
+        stopProcessing();
         wsRef.current?.close();
+        // Trigger a refresh of the processed datasets panel via custom event
+        window.dispatchEvent(new CustomEvent('viscurator:pipeline-done'));
       }
     }
 

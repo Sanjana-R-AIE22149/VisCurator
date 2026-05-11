@@ -25,11 +25,11 @@ from PIL import Image
 
 DATASET_ID = 'Francesco/leaf-disease-nsdsr'
 SOURCE = 'huggingface'
-LABEL_COL = 'fine_label'
+LABEL_COL = 'labels'
 IMAGE_COL = 'image'
 OUTPUT_DIR = Path('output')
 TARGET_SIZE = 224
-PLAN = {"needs_blur_filtering": true, "needs_deduplication": true, "needs_augmentation": false, "needs_synthetic_generation": false, "recommended_augmentations": ["resize_224"], "recommended_model": "ResNet18", "reasoning": "Default preprocessing plan."}
+PLAN = {'blur_filtering': True, 'deduplication': False, 'augmentation': True, 'augmentations': ['resize_224', 'horizontal_flip', 'random_brightness_contrast'], 'needs_blur_filtering': True, 'needs_deduplication': False, 'needs_augmentation': True, 'recommended_augmentations': ['resize_224', 'horizontal_flip', 'random_brightness_contrast']}
 RANDOM_SEED = 42
 BLUR_THRESHOLD_LARGE = 80.0   # for images >= 128px
 BLUR_THRESHOLD_SMALL = 8.0 
@@ -71,12 +71,18 @@ def _load():
         from datasets import load_dataset
         result_holder["ds"] = load_dataset(
             DATASET_ID, 
-            trust_remote_code=True, 
             num_proc=1,
             download_mode="reuse_cache_if_exists"
         )
     except Exception as e:
-        error_holder["err"] = str(e)
+        msg = str(e)
+        if "loading script" in msg or "trust_remote_code" in msg:
+            msg += (
+                "\nThis HuggingFace dataset appears to require a deprecated custom "
+                "loading script. Choose a dataset published in standard imagefolder, "
+                "Parquet, WebDataset, or COCO files."
+            )
+        error_holder["err"] = msg
 
 print(f"> Loading {DATASET_ID} from {SOURCE} ...")
 t = threading.Thread(target=_load)

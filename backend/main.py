@@ -286,7 +286,24 @@ async def list_jobs() -> list[dict[str, Any]]:
     return result
 
 
-@app.post("/api/dataset/search", response_model=DatasetSearchResponse, tags=["dataset"])
+@app.get("/api/dataset/list", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def list_datasets():
+    datasets = []
+    base_dir = Path("./cvagent_output")
+    if base_dir.exists():
+        for d in base_dir.iterdir():
+            if d.is_dir():
+                processed_dir = d / "processed"
+                if processed_dir.exists():
+                    datasets.append({
+                        "id": d.name,
+                        "path": str(processed_dir),
+                        "name": d.name.replace("_", " ").title()
+                    })
+    return datasets
+
+
+@app.post("/api/dataset/search", response_model=DatasetSearchResponse, tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def create_dataset_search(request: DatasetSearchRequest) -> DatasetSearchResponse:
     job_id = uuid4()
     now = datetime.utcnow()
@@ -492,32 +509,131 @@ async def get_job_status(job_id: UUID) -> JobStatus:
     return JobStatus(**{k: job[k] for k in JobStatus.model_fields if k in job})
 
 
-# ── User reply to a paused job ────────────────────────────────
-
 import shutil
 from fastapi.responses import FileResponse
+from backend.agent.export_utils import export_to_yolo_classification, export_to_coco_classification, export_to_yolo_detection
+
+
+@app.get("/api/dataset/processed", tags=["dataset"])
+async def list_processed_datasets() -> list[dict[str, Any]]:
+    """List all locally processed datasets available for download."""
+    # Scan all directories where the LLM has historically written output
+    OUTPUT_ROOTS = [
+        Path("./cvagent_output"),
+        Path("./curated_dataset"),
+        Path("./output"),
+    ]
+    results = []
+    seen_slugs: set[str] = set()
+
+    for output_root in OUTPUT_ROOTS:
+        if not output_root.exists():
+            continue
+        for subdir in sorted(output_root.iterdir()):
+            if not subdir.is_dir():
+                continue
+            processed = subdir / "processed"
+            if not processed.exists():
+                continue
+            classes = [d.name for d in processed.iterdir() if d.is_dir()]
+            if not classes:
+                continue
+            slug = subdir.name
+            if slug in seen_slugs:
+                continue
+            seen_slugs.add(slug)
+            image_count = sum(
+                len(list((processed / cls).glob("*.jpg"))) + len(list((processed / cls).glob("*.png")))
+                for cls in classes
+            )
+            report_file = processed / "preprocessing_report.json"
+            report = None
+            if report_file.exists():
+                try:
+                    report = json.loads(report_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            results.append({
+                "slug": slug,
+                "dataset_id": report.get("dataset_id", slug) if report else slug,
+                "classes": classes,
+                "class_count": len(classes),
+                "image_count": image_count,
+                "has_report": report_file.exists(),
+                "output_root": str(output_root),
+                "formats": ["zip", "coco", "yolo"],
+            })
+    return results
 
 @app.get("/api/dataset/download/{dataset_slug}", tags=["dataset"])
-async def download_dataset(dataset_slug: str):
-    """Zip and download a processed dataset."""
-    base_dir = Path("./cvagent_output") / dataset_slug / "processed"
-    if not base_dir.exists():
-        raise HTTPException(status_code=404, detail="Dataset not found or not processed yet.")
-    
-    zip_path = Path("./cvagent_output") / f"{dataset_slug}_processed.zip"
-    
+async def download_dataset(dataset_slug: str, format: str = "zip"):
+    """Zip and download a processed dataset in zip, coco, or yolo format."""
+    output_root = Path("./cvagent_output")  # default for new jobs
+
+    # All directories where output may have been written
+    ALL_ROOTS = [
+        Path("./cvagent_output"),
+        Path("./curated_dataset"),
+        Path("./output"),
+    ]
+
+    def _find_processed(slug: str) -> Path | None:
+        # Try exact + normalised variants in every known root
+        for root in ALL_ROOTS:
+            for variant in (slug, slug.replace("-", "_"), slug.replace("_", "-")):
+                p = root / variant / "processed"
+                try:
+                    if p.exists() and any(p.iterdir()):
+                        return p
+                except Exception:
+                    pass
+        # Fuzzy scan across all roots
+        norm = slug.lower().replace("-", "_")
+        for root in ALL_ROOTS:
+            if not root.exists():
+                continue
+            for subdir in root.iterdir():
+                if subdir.is_dir() and subdir.name.lower().replace("-", "_") == norm:
+                    p = subdir / "processed"
+                    if p.exists():
+                        return p
+        return None
+
+    base_dir = _find_processed(dataset_slug)
+    if base_dir is None:
+        # List what we actually have for a better error message
+        available = []
+        if output_root.exists():
+            available = [d.name for d in output_root.iterdir() if d.is_dir() and (d / "processed").exists()]
+        detail = f"Processed dataset '{dataset_slug}' not found."
+        if available:
+            detail += f" Available slugs: {', '.join(available)}"
+        else:
+            detail += " No processed datasets exist yet — run a curation job first."
+        raise HTTPException(status_code=404, detail=detail)
+
+    zip_filename = f"{dataset_slug}_{format}.zip"
+    zip_path = output_root / zip_filename
+
+    if zip_path.exists():
+        os.remove(zip_path)
+
+    if format == "yolo":
+        # YOLO classification format (folder per class under images/train/)
+        export_to_yolo_classification(base_dir, zip_path)
+    elif format == "coco":
+        export_to_coco_classification(base_dir, zip_path)
+    else:
+        # Default: raw ImageFolder ZIP
+        shutil.make_archive(str(zip_path).replace('.zip', ''), 'zip', str(base_dir))
+
     if not zip_path.exists():
-        # Create zip archive of the processed directory
-        shutil.make_archive(
-            str(zip_path).replace('.zip', ''), 
-            'zip', 
-            str(base_dir)
-        )
-    
+        raise HTTPException(status_code=500, detail="Export failed — zip was not created.")
+
     return FileResponse(
         path=zip_path,
-        filename=f"{dataset_slug}_processed.zip",
-        media_type="application/zip"
+        filename=zip_filename,
+        media_type="application/zip",
     )
 
 @app.post("/api/dataset/reply/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
@@ -742,6 +858,8 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
                 nodes=request.nodes,
                 task_type=request.task_type,
                 dataset_path=request.dataset_path,
+                epochs=request.epochs,
+                num_images=request.num_images,
             )
             training_runs[run_id_curated] = {
                 "run_id": run_id_curated,
@@ -762,6 +880,8 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
                 nodes=request.nodes,
                 task_type=request.task_type,
                 dataset_path=request.raw_dataset_path,
+                epochs=request.epochs,
+                num_images=request.num_images,
             )
             training_runs[run_id_raw] = {
                 "run_id": run_id_raw,
@@ -805,6 +925,8 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
                 nodes=request.nodes,
                 task_type=request.task_type,
                 dataset_path=request.dataset_path,
+                epochs=request.epochs,
+                num_images=request.num_images,
             )
             training_runs[run_id] = {
                 "run_id": run_id,
@@ -895,6 +1017,51 @@ async def dataset_job_report(job_id: UUID) -> dict[str, Any]:
             continue
     raise HTTPException(status_code=404, detail="Preprocessing report not found for this job.")
 
+
+@app.get("/api/library", tags=["system"])
+async def get_library() -> dict[str, Any]:
+    """Return all processed datasets and training runs for the Library page."""
+    # 1. Find processed datasets
+    datasets = []
+    output_dir = Path("./cvagent_output")
+    if output_dir.exists():
+        for ds_dir in output_dir.iterdir():
+            if not ds_dir.is_dir(): continue
+            processed_dir = ds_dir / "processed"
+            report_file = processed_dir / "preprocessing_report.json"
+            
+            if report_file.exists():
+                try:
+                    report = json.loads(report_file.read_text(encoding="utf-8"))
+                    datasets.append({
+                        "id": ds_dir.name,
+                        "name": report.get("dataset_id", ds_dir.name),
+                        "images": report.get("after_stats", {}).get("images", 0),
+                        "classes": list(report.get("class_distribution", {}).keys()),
+                        "created_at": datetime.fromtimestamp(report_file.stat().st_mtime).isoformat(),
+                        "type": "dataset"
+                    })
+                except Exception:
+                    continue
+
+    # 2. Find training runs
+    runs = list_training_runs()
+    formatted_runs = []
+    for run in runs:
+        formatted_runs.append({
+            "id": run["run_id"],
+            "name": f"Model: {run['run_id']}",
+            "accuracy": run.get("best_accuracy"),
+            "loss": run.get("best_loss"),
+            "epochs": run.get("epochs_recorded"),
+            "created_at": run.get("started_at"),
+            "type": "model"
+        })
+
+    return {
+        "datasets": sorted(datasets, key=lambda x: x["created_at"], reverse=True),
+        "models": formatted_runs
+    }
 
 @app.get("/api/builder/train/{run_id}/metrics", response_model=list[TrainingMetricPoint], tags=["builder"], dependencies=[Depends(get_current_user)])
 async def builder_train_metrics(run_id: str) -> list[TrainingMetricPoint]:

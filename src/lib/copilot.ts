@@ -5,7 +5,7 @@
  * and builder/compile endpoints.
  */
 
-import { BASE_URL } from './api';
+import { BASE_URL, authHeaders } from './api';
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -81,7 +81,8 @@ async function* readSSEStream(response: Response): AsyncGenerator<string> {
  */
 export async function* streamCopilotAnalysis(
   nodes: GraphNode[],
-  edges: GraphEdge[]
+  edges: GraphEdge[],
+  signal?: AbortSignal
 ): AsyncGenerator<string> {
   const serializedNodes = nodes.map((n) => ({
     id: n.id,
@@ -98,8 +99,9 @@ export async function* streamCopilotAnalysis(
 
   const res = await fetch(`${BASE_URL}/api/copilot/analyze`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ nodes: serializedNodes, edges: serializedEdges }),
+    signal,
   });
 
   if (!res.ok) {
@@ -141,7 +143,7 @@ export async function compileGraph(
 
   const res = await fetch(`${BASE_URL}/api/builder/compile`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ nodes: serializedNodes, edges: serializedEdges }),
   });
 

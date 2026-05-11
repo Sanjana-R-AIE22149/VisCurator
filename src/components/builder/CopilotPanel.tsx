@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Bot, Zap, AlertTriangle, ChevronRight, X, Copy, Check, Download } from 'lucide-react';
 import { streamCopilotAnalysis, compileGraph, type CompileResult } from '../../lib/copilot';
-import { connectTrainingWebSocket, getHealth, startTrainingRun, type PipelineMessage } from '../../lib/api';
+import { connectTrainingWebSocket, getHealth, startTrainingRun, getLocalDatasets, type PipelineMessage, type DatasetInfo } from '../../lib/api';
 
 function highlightPython(code: string): React.ReactNode[] {
   const lines = code.split('\n');
@@ -90,6 +90,8 @@ export default function CopilotPanel() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const trainingWsRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastGraphRef = useRef('');
 
   const [showCompileModal, setShowCompileModal] = useState(false);
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
@@ -97,6 +99,24 @@ export default function CopilotPanel() {
   const [compileError, setCompileError] = useState('');
   const [copied, setCopied] = useState(false);
   const [isStartingTraining, setIsStartingTraining] = useState(false);
+  
+  const [customEpochs, setCustomEpochs] = useState<number>(10);
+  const [customImages, setCustomImages] = useState<number>(1000);
+  
+  const [localDatasets, setLocalDatasets] = useState<DatasetInfo[]>([]);
+  const [selectedDatasetPath, setSelectedDatasetPath] = useState<string>('');
+
+  useEffect(() => {
+    getLocalDatasets()
+      .then(ds => {
+        setLocalDatasets(ds);
+        if (ds.length > 0) {
+          const recentPath = preprocessingReport?.output_dir || ds[ds.length - 1].path;
+          setSelectedDatasetPath(recentPath);
+        }
+      })
+      .catch(err => console.log('Failed to fetch datasets', err));
+  }, [preprocessingReport]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -105,35 +125,56 @@ export default function CopilotPanel() {
   }, [copilotResponse]);
 
   const analyzeGraph = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     setCopilotResponse('');
     setIsCopilotStreaming(true);
 
     const alive = await getHealth();
     if (!alive.online) {
-      setCopilotResponse('Backend offline.\n\nStart `python run_demo.py` to enable real copilot analysis.');
-      setIsCopilotStreaming(false);
+      if (!signal.aborted) {
+        setCopilotResponse('Backend offline.\n\nStart `python run_demo.py` to enable real copilot analysis.');
+        setIsCopilotStreaming(false);
+      }
       return;
     }
 
     try {
       let accumulated = '';
-      for await (const chunk of streamCopilotAnalysis(nodes, edges)) {
+      for await (const chunk of streamCopilotAnalysis(nodes, edges, signal)) {
+        if (signal.aborted) return;
         accumulated += chunk;
         setCopilotResponse(accumulated);
       }
     } catch (err) {
-      setCopilotResponse(`Analysis unavailable.\n\n${err instanceof Error ? err.message : 'Streaming request failed.'}`);
-      setIsCopilotStreaming(false);
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (!signal.aborted) {
+        setCopilotResponse(`Analysis unavailable.\n\n${err instanceof Error ? err.message : 'Streaming request failed.'}`);
+        setIsCopilotStreaming(false);
+      }
       return;
     }
 
-    setIsCopilotStreaming(false);
+    if (!signal.aborted) {
+      setIsCopilotStreaming(false);
+    }
   }, [edges, nodes, setCopilotResponse, setIsCopilotStreaming]);
 
   useEffect(() => {
-    const timer = setTimeout(analyzeGraph, 800);
+    const signature = JSON.stringify({
+      n: nodes.map(n => ({ t: n.type, d: n.data })),
+      e: edges.map(e => ({ s: e.source, t: e.target }))
+    });
+    if (signature === lastGraphRef.current) return;
+    lastGraphRef.current = signature;
+
+    const timer = setTimeout(analyzeGraph, 1200);
     return () => clearTimeout(timer);
-  }, [analyzeGraph]);
+  }, [nodes, edges, analyzeGraph]);
 
   useEffect(() => {
     return () => {
@@ -230,9 +271,16 @@ export default function CopilotPanel() {
 
   const handleTrain = useCallback(async () => {
     setIsStartingTraining(true);
-    const datasetPath = preprocessingReport?.output_dir ?? null;
+    const datasetPath = trainingTaskType === 'custom_curated' ? selectedDatasetPath : null;
     try {
-      const response = await startTrainingRun(nodes, edges, trainingTaskType, datasetPath);
+      const response = await startTrainingRun(
+        nodes, 
+        edges, 
+        trainingTaskType, 
+        datasetPath,
+        trainingTaskType === 'custom_curated' ? customEpochs : undefined,
+        trainingTaskType === 'custom_curated' ? customImages : undefined
+      );
       startTraining(response.run_id, response.task_type);
       addTrainingLog({
         id: `train-start-${Date.now()}`,
@@ -278,7 +326,7 @@ export default function CopilotPanel() {
     } finally {
       setIsStartingTraining(false);
     }
-  }, [addTrainingLog, edges, nodes, preprocessingReport, startTraining, stopTraining, trainingTaskType]);
+  }, [addTrainingLog, edges, nodes, selectedDatasetPath, startTraining, stopTraining, trainingTaskType, customEpochs, customImages]);
 
   return (
     <>
@@ -362,13 +410,41 @@ export default function CopilotPanel() {
             </div>
             <select
               value={trainingTaskType}
-              onChange={(e) => setTrainingTaskType(e.target.value as 'mnist_classification' | 'object_detection')}
+              onChange={(e) => setTrainingTaskType(e.target.value as any)}
               disabled={isTraining || isStartingTraining}
               className="w-full rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-500/50"
             >
               <option value="mnist_classification">MNIST CNN Classification</option>
               <option value="object_detection">Light Object Detection</option>
+              <option value="custom_curated">Custom Curated Dataset</option>
             </select>
+            {trainingTaskType === 'custom_curated' && (
+              <div className="space-y-2">
+                <div>
+                  <span className="text-[9px] uppercase tracking-widest text-slate-500">Dataset</span>
+                  <select
+                    value={selectedDatasetPath}
+                    onChange={(e) => setSelectedDatasetPath(e.target.value)}
+                    className="w-full mt-1 rounded bg-slate-900 border border-slate-700 px-2 py-1.5 text-[11px] text-slate-200"
+                  >
+                    {localDatasets.length === 0 && <option value="">No datasets found</option>}
+                    {localDatasets.map(ds => (
+                      <option key={ds.id} value={ds.path}>{ds.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <span className="text-[9px] uppercase tracking-widest text-slate-500">Epochs</span>
+                    <input type="number" min={1} value={customEpochs} onChange={(e) => setCustomEpochs(Number(e.target.value))} className="w-full mt-1 rounded bg-slate-900 border border-slate-700 px-2 py-1.5 text-[11px] text-slate-200" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[9px] uppercase tracking-widest text-slate-500">Subset Size</span>
+                    <input type="number" min={1} value={customImages} onChange={(e) => setCustomImages(Number(e.target.value))} className="w-full mt-1 rounded bg-slate-900 border border-slate-700 px-2 py-1.5 text-[11px] text-slate-200" />
+                  </div>
+                </div>
+              </div>
+            )}
             <button
               onClick={handleTrain}
               disabled={isTraining || isStartingTraining}

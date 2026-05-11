@@ -184,7 +184,7 @@ export default function DatasetBrowser() {
                   </p>
 
                   {/* Tags */}
-                  {r.tags.length > 0 && (
+                  {r.tags && r.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {r.tags.slice(0, 4).map((tag) => (
                         <span key={tag} className="rounded px-1.5 py-0.5 bg-slate-800/60 text-[9px] font-mono text-slate-500">

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AppLayout from './components/layout/AppLayout';
@@ -7,6 +8,7 @@ import DatasetPage from './pages/DatasetPage';
 import BuilderPage from './pages/BuilderPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import LibraryPage from './pages/LibraryPage';
+import BootScreen from './components/ui/BootScreen';
 
 /* ── Settings placeholder (stub) ── */
 function SettingsPage() {
@@ -21,25 +23,39 @@ function SettingsPage() {
 }
 
 export default function App() {
+  // Show boot screen once per browser session (disappears after refresh-free navigation)
+  const [booting, setBooting] = useState<boolean>(
+    () => !sessionStorage.getItem('vc_booted')
+  );
+
+  function handleBootDone() {
+    sessionStorage.setItem('vc_booted', '1');
+    setBooting(false);
+  }
+
   return (
-    <Routes>
-      {/* ── Public ── */}
-      <Route path="/login" element={<LoginPage />} />
+    <>
+      {booting && <BootScreen onDone={handleBootDone} />}
 
-      {/* ── Protected ── */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="dataset" element={<DatasetPage />} />
-          <Route path="builder" element={<BuilderPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="library" element={<LibraryPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+      <Routes>
+        {/* ── Public ── */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* ── Protected ── */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="dataset" element={<DatasetPage />} />
+            <Route path="builder" element={<BuilderPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="library" element={<LibraryPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
         </Route>
-      </Route>
 
-      {/* ── Catch-all ── */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* ── Catch-all ── */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

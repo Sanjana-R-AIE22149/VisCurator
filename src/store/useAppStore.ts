@@ -161,7 +161,7 @@ interface DatasetState {
 interface TrainingState {
   isTraining: boolean;
   trainingRunId: string | null;
-  trainingTaskType: 'mnist_classification' | 'object_detection';
+  trainingTaskType: 'mnist_classification' | 'object_detection' | 'custom_curated';
   trainingLogs: TerminalLog[];
   trainingMetrics: TrainingMetricPoint[];
 }
@@ -172,6 +172,7 @@ interface FlowState {
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
+  updateNodeData: (nodeId: string, data: Record<string, any>) => void;
 }
 
 interface CopilotState {
@@ -358,6 +359,9 @@ export const useAppStore = create<AppStore>()(
       addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
       setNodes: (nodes) => set({ nodes }),
       setEdges: (edges) => set({ edges }),
+      updateNodeData: (nodeId, data) => set((state) => ({
+        nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n))
+      })),
 
       copilotResponse: '',
       isCopilotStreaming: false,

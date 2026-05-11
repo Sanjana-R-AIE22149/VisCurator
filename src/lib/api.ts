@@ -52,6 +52,16 @@ export async function apiLogin(username: string, password: string): Promise<Logi
   return res.json();
 }
 
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    throw new Error('Session expired. Please log in again.');
+  }
+  return res;
+}
+
 // ── Shared types ──────────────────────────────────────────────────────────────
 
 export interface PipelineMessage {
@@ -132,7 +142,7 @@ export async function startDatasetPipeline(
   targetSize: number,
 ): Promise<{ job_id: string }> {
   console.log('[API REQ] startDatasetPipeline:', { query, source, targetSize });
-  const res = await fetch(`${BASE_URL}/api/dataset/search`, {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ query, source: SOURCE_MAP[source] ?? 'huggingface', target_size: targetSize }),
@@ -148,7 +158,7 @@ export async function startDatasetPipeline(
 
 export async function replyToJob(jobId: string, reply: string): Promise<void> {
   console.log('[API REQ] replyToJob:', { jobId, reply });
-  const res = await fetch(`${BASE_URL}/api/dataset/reply/${jobId}`, {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/reply/${jobId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ reply }),
@@ -160,12 +170,26 @@ export async function replyToJob(jobId: string, reply: string): Promise<void> {
   console.log('[API RES] replyToJob OK');
 }
 
+export interface DatasetInfo {
+  id: string;
+  path: string;
+  name: string;
+}
+
+export async function getLocalDatasets(): Promise<DatasetInfo[]> {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/list`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to fetch datasets');
+  return res.json();
+}
+
 export async function uploadDataset(file: File): Promise<{ job_id: string; files: string[]; slug: string }> {
   console.log('[API REQ] uploadDataset:', file.name);
   const formData = new FormData();
   formData.append('file', file);
   
-  const res = await fetch(`${BASE_URL}/api/dataset/upload`, {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/upload`, {
     method: 'POST',
     headers: authHeaders(), // FormData sets its own Content-Type with boundary
     body: formData,
@@ -180,7 +204,7 @@ export async function uploadDataset(file: File): Promise<{ job_id: string; files
   console.log('[API RES] uploadDataset OK:', data);
   
   // Fetch job status to get the file list
-  const statusRes = await fetch(`${BASE_URL}/api/dataset/status/${data.job_id}`, { headers: authHeaders() });
+  const statusRes = await apiFetch(`${BASE_URL}/api/dataset/status/${data.job_id}`, { headers: authHeaders() });
   const statusData = await statusRes.json();
   
   return { 
@@ -197,7 +221,7 @@ export async function uploadSeedClass(jobId: string, className: string, files: F
     formData.append('files', files[i]);
   }
   
-  const res = await fetch(`${BASE_URL}/api/dataset/seed/${jobId}/${className}`, {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/seed/${jobId}/${className}`, {
     method: 'POST',
     headers: authHeaders(),
     body: formData,
@@ -212,7 +236,7 @@ export async function uploadSeedClass(jobId: string, className: string, files: F
 
 export async function startAnnotation(jobId: string): Promise<void> {
   console.log('[API REQ] startAnnotation:', { jobId });
-  const res = await fetch(`${BASE_URL}/api/dataset/annotate`, {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ job_id: jobId, seeds: {} }),
@@ -233,7 +257,7 @@ export async function startAnnotation(jobId: string): Promise<void> {
 
 export async function getDatasetJobs(): Promise<JobListItem[]> {
   try {
-    const res = await fetch(`${BASE_URL}/api/dataset/jobs`, {
+    const res = await apiFetch(`${BASE_URL}/api/dataset/jobs`, {
       headers: authHeaders(),
       signal: AbortSignal.timeout(5000),
     });
@@ -388,20 +412,22 @@ export const fetchHealth = getHealth;
 export async function startTrainingRun(
   nodes: unknown[],
   edges: unknown[],
-  taskType: 'mnist_classification' | 'object_detection',
+  taskType: 'mnist_classification' | 'object_detection' | 'custom_curated',
   datasetPath?: string | null,
+  epochs?: number,
+  numImages?: number,
 ): Promise<BuilderTrainResponse> {
-  const res = await fetch(`${BASE_URL}/api/builder/train`, {
+  const res = await apiFetch(`${BASE_URL}/api/builder/train`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ nodes, edges, task_type: taskType, dataset_path: datasetPath ?? null }),
+    body: JSON.stringify({ nodes, edges, task_type: taskType, dataset_path: datasetPath ?? null, epochs, num_images: numImages }),
   });
   if (!res.ok) throw new Error(`Training API returned ${res.status}`);
   return res.json();
 }
 
 export async function getTrainingRuns(): Promise<TrainingRunSummary[]> {
-  const res = await fetch(`${BASE_URL}/api/builder/train/runs`, {
+  const res = await apiFetch(`${BASE_URL}/api/builder/train/runs`, {
     headers: authHeaders(),
     signal: AbortSignal.timeout(5000),
   });
@@ -410,7 +436,7 @@ export async function getTrainingRuns(): Promise<TrainingRunSummary[]> {
 }
 
 export async function getTrainingMetrics(runId: string): Promise<TrainingMetricPoint[]> {
-  const res = await fetch(`${BASE_URL}/api/builder/train/${runId}/metrics`, {
+  const res = await apiFetch(`${BASE_URL}/api/builder/train/${runId}/metrics`, {
     headers: authHeaders(),
     signal: AbortSignal.timeout(5000),
   });

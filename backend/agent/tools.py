@@ -286,13 +286,29 @@ async def _search_huggingface(query: str, max_results: int) -> list[dict[str, An
     queries_to_run = expanded[:4]
     logger.info("HF parallel search: %r", queries_to_run)
 
+    # Tags that indicate an image dataset
+    IMAGE_TAGS = {
+        "image-classification", "object-detection", "image-segmentation",
+        "image-to-image", "visual-question-answering", "image-feature-extraction",
+        "image", "images", "computer-vision", "cv", "task_categories:image-classification",
+        "task_categories:object-detection", "task_categories:image-segmentation",
+        "modality:image", "modalities:image",
+    }
+    # Tags that definitively mark a NON-image dataset
+    NON_IMAGE_TAGS = {
+        "text-classification", "text-generation", "question-answering",
+        "summarization", "translation", "audio", "speech", "audio-classification",
+        "automatic-speech-recognition", "text", "tabular", "token-classification",
+        "modality:text", "modality:audio", "modality:tabular",
+    }
+
     async def _single_search(session: aiohttp.ClientSession, q: str) -> list[dict]:
         results = []
         for sort in ("downloads", "likes"):
-            params = {"search": q, "limit": max_results, "sort": sort, "direction": "-1"}
+            params = {"search": q, "limit": max_results * 3, "sort": sort, "direction": "-1"}
             try:
                 async with session.get(
-                    "https://huggingface.co/api/datasets", 
+                    "https://huggingface.co/api/datasets",
                     params=params
                 ) as resp:
                     if resp.status != 200:
@@ -302,6 +318,20 @@ async def _search_huggingface(query: str, max_results: int) -> list[dict[str, An
                     ds_id = ds.get("id", "")
                     if not ds_id:
                         continue
+                    tags_raw: list[str] = ds.get("tags", []) or []
+                    tags_lower = {t.lower() for t in tags_raw}
+
+                    # Drop datasets that are explicitly non-image
+                    if tags_lower & NON_IMAGE_TAGS:
+                        continue
+
+                    # Accept if any image tag present, OR if no modality tags at all
+                    # (many small CV datasets have no tags — don't exclude them)
+                    has_image_tag = bool(tags_lower & IMAGE_TAGS)
+                    has_any_modality = bool(tags_lower & (IMAGE_TAGS | NON_IMAGE_TAGS))
+                    if has_any_modality and not has_image_tag:
+                        continue  # has modality tags but none are image → skip
+
                     results.append({
                         "source": "HuggingFace",
                         "dataset_id": ds_id,
@@ -309,13 +339,16 @@ async def _search_huggingface(query: str, max_results: int) -> list[dict[str, An
                         "description": (ds.get("description") or "")[:200],
                         "downloads": ds.get("downloads", 0),
                         "likes": ds.get("likes", 0),
-                        "tags": ds.get("tags", []),
+                        "tags": tags_raw,
+                        "has_image_tag": has_image_tag,
                         "url": f"https://huggingface.co/datasets/{ds_id}",
                         "size_estimate": "metadata-only",
-                        "_search_query": q,  # track which query found this
+                        "_search_query": q,
                     })
+                    if len(results) >= max_results:
+                        break
                 if results:
-                    break  # got results from this sort, no need to try other sort
+                    break
             except asyncio.TimeoutError:
                 logger.warning("HF timeout for q=%r sort=%r", q, sort)
             except Exception as e:
@@ -358,6 +391,10 @@ async def _search_huggingface(query: str, max_results: int) -> list[dict[str, An
         tags_lower = " ".join(ds.get("tags", [])).lower()
         combined = ds_id_lower + " " + desc_lower + " " + tags_lower
 
+        # Bonus for explicitly image-tagged datasets
+        if ds.get("has_image_tag"):
+            score += 4.0
+
         # Word overlap with original query
         for w in q_words:
             if w in combined:
@@ -390,10 +427,11 @@ async def _search_huggingface(query: str, max_results: int) -> list[dict[str, An
 
     merged.sort(key=_relevance, reverse=True)
     
-    # Remove internal tracking field before returning
+    # Remove internal tracking fields before returning
     for ds in merged:
         ds.pop("_search_query", None)
         ds.pop("tags", None)  # tags can be large, not needed downstream
+        ds.pop("has_image_tag", None)
 
     logger.info("HF adaptive search for %r: %d unique results", query, len(merged))
     return merged[:max_results]
@@ -1045,6 +1083,27 @@ def _build_preprocess_script(
                 return raw_img.convert("RGB")
             return None
 
+        def resolve_label(row, default_col, dataset_dict):
+            col = default_col
+            if col not in row:
+                for fallback in ["label", "labels", "category", "class", "target"]:
+                    if fallback in row:
+                        col = fallback
+                        break
+            val = row.get(col)
+            if val is None:
+                return "unknown"
+            if isinstance(val, int):
+                try:
+                    feats = next(iter(dataset_dict.values())).features
+                    if hasattr(feats[col], "int2str"):
+                        return feats[col].int2str(val)
+                    elif hasattr(feats[col], "names"):
+                        return feats[col].names[val]
+                except Exception:
+                    pass
+            return str(val)
+
         def build_augmenter():
             resize_side = 224 if "resize_224" in PLAN.get("recommended_augmentations", []) else 256
             ops = [A.Resize(resize_side, resize_side)]
@@ -1132,7 +1191,7 @@ def _build_preprocess_script(
             if img is None:
                 continue
             
-            label = str(row.get(LABEL_COL, "unknown"))
+            label = resolve_label(row, LABEL_COL, ds)
             before_counts[label] += 1
             blur_value = laplacian_var(img)
             img_hash = str(imagehash.dhash(img))
@@ -1141,10 +1200,12 @@ def _build_preprocess_script(
             is_dup = img_hash in seen_hashes
             
             # Save Raw Samples
-            if len(sample_maps["raw"]) < 5:
+            if len(sample_maps["raw"]) < 8:
                 fname = f"raw_{{idx:05d}}.jpg"
                 img.save(output_samples / "raw" / fname, "JPEG", quality=85)
-                sample_maps["raw"].append({{"url": f"samples/raw/{{fname}}", "label": label, "id": idx}})
+                sinfo = {{"url": f"samples/raw/{{fname}}", "label": label, "id": idx}}
+                sample_maps["raw"].append(sinfo)
+                emit_event("sample", {{"stage": "raw", "sample": sinfo}})
 
             blur_scatter.append({{
                 "id": idx,
@@ -1158,11 +1219,13 @@ def _build_preprocess_script(
                 if PLAN.get("needs_deduplication") and is_dup: rejected_dup += 1
                 
                 # Save Filtered Samples
-                if len(sample_maps["filtered"]) < 5:
+                if len(sample_maps["filtered"]) < 8:
                     reason = "blurry" if is_blurry else "duplicate"
                     fname = f"filtered_{{idx:05d}}.jpg"
                     img.save(output_samples / "filtered" / fname, "JPEG", quality=85)
-                    sample_maps["filtered"].append({{"url": f"samples/filtered/{{fname}}", "label": label, "reason": reason, "id": idx}})
+                    sinfo = {{"url": f"samples/filtered/{{fname}}", "label": label, "reason": reason, "id": idx}}
+                    sample_maps["filtered"].append(sinfo)
+                    emit_event("sample", {{"stage": "filtered", "sample": sinfo}})
                 continue
                 
             seen_hashes.add(img_hash)
@@ -1185,10 +1248,12 @@ def _build_preprocess_script(
             Image.fromarray(resized).save(out_dir / save_name, "JPEG", quality=92)
             
             # Save Processed Samples
-            if len(sample_maps["processed"]) < 5:
+            if len(sample_maps["processed"]) < 8:
                 fname = f"proc_{{sample_index:05d}}.jpg"
                 Image.fromarray(resized).save(output_samples / "processed" / fname, "JPEG", quality=85)
-                sample_maps["processed"].append({{"url": f"samples/processed/{{fname}}", "label": label, "id": original_idx}})
+                sinfo = {{"url": f"samples/processed/{{fname}}", "label": label, "id": original_idx}}
+                sample_maps["processed"].append(sinfo)
+                emit_event("sample", {{"stage": "processed", "sample": sinfo}})
             
             after_counts[label] += 1
             export_total += 1
@@ -1242,11 +1307,16 @@ async def clean_and_augment_dataset(
     processing_plan: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
     """Run deterministic filtering, deduplication, normalization, and augmentation."""
+    # ALWAYS force output to the canonical location regardless of what the LLM passed.
+    # This prevents files being scattered across curated_dataset/, output/, etc.
+    output_dir = "./cvagent_output"
+
     # Defensive type coercion for LLM-generated args that may be strings
     try:
         target_size = int(target_size)
     except (ValueError, TypeError):
         target_size = 1000
+
     
     # Parse processing_plan if it's a string (from LLM JSON)
     if isinstance(processing_plan, str):
@@ -1602,7 +1672,7 @@ def _build_download_script(
                 continue
             seen_hashes.add(h)
 
-            label = str(row.get(LABEL_COL, "unknown"))
+            label = resolve_label(row, LABEL_COL, ds)
             accepted.append((img, label))
 
             if (i+1) % 500 == 0:

@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { AlertTriangle, BarChart3, Download, Info, Layers, Target, TrendingUp, Columns, Zap } from 'lucide-react';
+import { AlertTriangle, BarChart3, Download, Info, Layers, Target, TrendingUp, Columns, Zap, FlaskConical, WifiOff } from 'lucide-react';
 import { getTrainingMetrics, getTrainingRuns, BASE_URL, type TrainingMetricPoint, type TrainingRunSummary } from '../lib/api';
 
 const GRID_STROKE = '#1e293b';
@@ -396,20 +396,81 @@ export default function AnalyticsPage() {
 
   if (isLoadingRuns) {
     return (
-      <div className="h-full flex items-center justify-center p-6 animate-fade-up">
+      <div className="h-full flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-4">
           <div className="relative inline-flex">
             <div className="absolute inset-0 rounded-full bg-teal-500/20 blur-2xl animate-pulse" />
             <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-              <TrendingUp className="h-10 w-10 text-teal-400" />
+              <TrendingUp className="h-10 w-10 text-teal-400 animate-pulse" />
             </div>
           </div>
           <div>
             <h2 className="mb-2 text-2xl font-bold text-white">Loading Analytics</h2>
             <p className="text-sm leading-relaxed text-slate-500">
-              Pulling runs and metrics from the SQLite training store.
+              Pulling runs and metrics from the SQLite training store…
             </p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Backend offline or auth error ─────────────────────────────
+  if (runsError) {
+    const isOffline = runsError.toLowerCase().includes('fetch') || runsError.toLowerCase().includes('network') || runsError.toLowerCase().includes('failed');
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="relative inline-flex">
+            <div className="absolute inset-0 rounded-full bg-rose-500/20 blur-2xl" />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-rose-800/50 bg-slate-900 shadow-2xl">
+              {isOffline ? <WifiOff className="h-10 w-10 text-rose-400" /> : <AlertTriangle className="h-10 w-10 text-rose-400" />}
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-2 text-2xl font-bold text-white">
+              {isOffline ? 'Backend Offline' : 'Analytics Unavailable'}
+            </h2>
+            <p className="text-sm leading-relaxed text-slate-400">
+              {isOffline
+                ? 'Could not reach the VisCurator backend at localhost:8000. Make sure the server is running.'
+                : runsError}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-left font-mono text-xs text-rose-400">
+            {runsError}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── No runs yet ───────────────────────────────────────────────
+  if (runs.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="relative inline-flex">
+            <div className="absolute inset-0 rounded-full bg-purple-500/20 blur-2xl" />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl border border-purple-800/50 bg-slate-900 shadow-2xl">
+              <FlaskConical className="h-10 w-10 text-purple-400" />
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-2 text-2xl font-bold text-white">No Training Runs Yet</h2>
+            <p className="text-sm leading-relaxed text-slate-400">
+              Analytics will appear here once you launch a training job from the{' '}
+              <strong className="text-slate-200">Builder</strong> page. Design a model, hit{' '}
+              <span className="font-mono text-purple-300">Train</span>, and come back.
+            </p>
+          </div>
+          <a
+            href="/builder"
+            className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 px-5 py-2.5 text-sm font-medium text-purple-300 transition hover:bg-purple-500/20"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Go to Builder
+          </a>
         </div>
       </div>
     );

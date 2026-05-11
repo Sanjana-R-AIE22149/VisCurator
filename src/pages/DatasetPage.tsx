@@ -1,4 +1,4 @@
-import { BarChart3, CopyCheck, Database, FileText, ScanSearch, ShieldCheck, Sparkles, Wand2, Download } from 'lucide-react';
+import { BarChart3, CopyCheck, Database, FileText, FolderDown, ScanSearch, ShieldCheck, Sparkles, Wand2, Download, RefreshCw } from 'lucide-react';
 import DatasetControls from '../components/dataset/DatasetControls';
 import DatasetBrowser from '../components/dataset/DatasetBrowser';
 import LiveTerminal from '../components/dataset/LiveTerminal';
@@ -6,8 +6,8 @@ import BlurFilterChart from '../components/dataset/BlurFilterChart';
 import StagePreview from '../components/dataset/StagePreview';
 import PreprocessingReportModal from '../components/dataset/PreprocessingReportModal';
 import { useAppStore } from '../store/useAppStore';
-import { useState } from 'react';
-import { BASE_URL } from '../lib/api';
+import { useState, useEffect } from 'react';
+import { BASE_URL, authHeaders } from '../lib/api';
 
 import AnnotationSeedUI from '../components/dataset/AnnotationSeedUI';
 
@@ -23,6 +23,32 @@ export default function DatasetPage() {
   } = useAppStore();
 
   const [reportOpen, setReportOpen] = useState(false);
+  const [processedDatasets, setProcessedDatasets] = useState<Array<{ slug: string; dataset_id: string; class_count: number; image_count: number; has_report: boolean }>>([]);
+  const [loadingProcessed, setLoadingProcessed] = useState(false);
+
+  // Load available processed datasets (persists across page refreshes)
+  const fetchProcessed = async () => {
+    setLoadingProcessed(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/dataset/processed`, { headers: authHeaders() });
+      if (res.ok) setProcessedDatasets(await res.json());
+    } catch { /* backend offline */ }
+    finally { setLoadingProcessed(false); }
+  };
+
+  useEffect(() => { void fetchProcessed(); }, []);
+
+  // Auto-refresh when pipeline finishes
+  useEffect(() => {
+    const handler = () => { void fetchProcessed(); };
+    window.addEventListener('viscurator:pipeline-done', handler);
+    return () => window.removeEventListener('viscurator:pipeline-done', handler);
+  }, []);
+
+  // Recompute slug from current preprocessingReport
+  const currentSlug = preprocessingReport?.dataset_id
+    ? preprocessingReport.dataset_id.replace(/\//g, '_')
+    : null;
 
   const stats = [
     {
@@ -108,24 +134,69 @@ export default function DatasetPage() {
           ))}
         </div>
 
-        {/* View Report button — shown once a job has completed preprocessing */}
-        {preprocessingReport && jobId && (
+        {/* Persistent download section for all processed datasets */}
+        {processedDatasets.length > 0 && (
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderDown className="w-4 h-4 text-teal-400" />
+                <p className="text-xs font-semibold text-slate-300">Processed Datasets</p>
+              </div>
+              <button
+                onClick={() => void fetchProcessed()}
+                disabled={loadingProcessed}
+                className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                <RefreshCw className={`w-3 h-3 ${loadingProcessed ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+            <div className="space-y-2">
+              {processedDatasets.map((ds) => (
+                <div key={ds.slug} className="flex items-center justify-between rounded-lg border border-slate-800/40 bg-slate-950/50 px-4 py-2.5 gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-mono text-slate-300 truncate">{ds.dataset_id}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{ds.class_count} classes · {ds.image_count.toLocaleString()} images</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(['zip', 'coco', 'yolo'] as const).map((fmt) => (
+                      <a
+                        key={fmt}
+                        href={`${BASE_URL}/api/dataset/download/${ds.slug}?format=${fmt}`}
+                        download
+                        className="rounded border border-slate-700/60 bg-slate-800/60 px-2 py-1 text-[10px] font-mono text-slate-300 hover:bg-slate-700/60 hover:text-slate-100 transition-colors"
+                      >
+                        {fmt.toUpperCase()}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Inline download section after active curation job */}
+        {preprocessingReport && jobId && currentSlug && (
           <div className="flex items-center gap-3 rounded-xl border border-teal-500/20 bg-teal-500/5 px-4 py-3">
             <div className="flex-1">
-              <p className="text-xs font-semibold text-teal-300">Preprocessing complete</p>
+              <p className="text-xs font-semibold text-teal-300">Preprocessing complete — ready to download</p>
               {preprocessingReport.output_dir && (
                 <p className="text-[10px] font-mono text-slate-500 mt-0.5 truncate">{preprocessingReport.output_dir}</p>
               )}
             </div>
             <div className="flex gap-2">
-              <a
-                href={`${BASE_URL}/api/dataset/download/${preprocessingReport.dataset_id.replace(/\//g, '_')}`}
-                download
-                className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Download Zip
-              </a>
+              {(['zip', 'coco', 'yolo'] as const).map((fmt) => (
+                <a
+                  key={fmt}
+                  href={`${BASE_URL}/api/dataset/download/${currentSlug}?format=${fmt}`}
+                  download
+                  className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {fmt.toUpperCase()}
+                </a>
+              ))}
               <button
                 onClick={() => setReportOpen(true)}
                 className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"

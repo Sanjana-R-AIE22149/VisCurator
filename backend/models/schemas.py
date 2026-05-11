@@ -137,10 +137,12 @@ class BuilderTrainRequest(BaseModel):
 
     nodes: list[dict[str, Any]] = Field(...)
     edges: list[dict[str, Any]] = Field(default_factory=list)
-    task_type: str = Field(default="mnist_classification", pattern="^(mnist_classification|object_detection)$")
+    task_type: str = Field(default="mnist_classification", pattern="^(mnist_classification|object_detection|custom_curated)$")
     dataset_path: str | None = Field(default=None, description="Path to an ImageFolder-format dataset directory.")
     compare_mode: bool = Field(default=False, description="Whether to run a parallel training run for comparison.")
     raw_dataset_path: str | None = Field(default=None, description="Path to the raw dataset for comparison.")
+    epochs: int | None = Field(default=None, description="Number of epochs to train.")
+    num_images: int | None = Field(default=None, description="Number of images to use.")
 
 
 class BuilderTrainResponse(BaseModel):

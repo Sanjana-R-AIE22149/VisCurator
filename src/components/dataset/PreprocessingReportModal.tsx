@@ -4,7 +4,8 @@ import {
   ScatterChart, Scatter, Cell, ReferenceLine,
 } from 'recharts';
 import { X, FileText, Loader2, AlertTriangle } from 'lucide-react';
-import { BASE_URL } from '../../lib/api';
+import { BASE_URL, authHeaders } from '../../lib/api';
+import { useAppStore } from '../../store/useAppStore';
 
 interface BlurPoint {
   id: number;
@@ -93,21 +94,34 @@ interface Props {
 }
 
 export default function PreprocessingReportModal({ jobId, onClose }: Props) {
-  const [report, setReport]   = useState<PreprocessingReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { preprocessingReport: storeReport } = useAppStore();
+  const [report, setReport]   = useState<PreprocessingReport | null>(storeReport as PreprocessingReport | null);
+  const [loading, setLoading] = useState(!storeReport);
   const [error, setError]     = useState('');
 
   useEffect(() => {
+    // If we already have it from the store, show immediately while fetching fresh copy
+    if (storeReport) setReport(storeReport as PreprocessingReport);
+
     let cancelled = false;
-    fetch(`${BASE_URL}/api/dataset/jobs/${jobId}/report`, { signal: AbortSignal.timeout(8000) })
+    fetch(`${BASE_URL}/api/dataset/jobs/${jobId}/report`, {
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(8000),
+    })
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${r.statusText}`);
         return r.json() as Promise<PreprocessingReport>;
       })
       .then((data) => { if (!cancelled) { setReport(data); setLoading(false); } })
-      .catch((err) => { if (!cancelled) { setError((err as Error).message); setLoading(false); } });
+      .catch((err) => {
+        if (!cancelled) {
+          // Don't show error if we already have store data
+          if (!storeReport) setError((err as Error).message);
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
-  }, [jobId]);
+  }, [jobId, storeReport]);
 
   // Close on Escape
   useEffect(() => {

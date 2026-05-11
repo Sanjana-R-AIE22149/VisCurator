@@ -334,6 +334,20 @@ class DatasetAgent:
             ))
 
         async def _script_emit(line: str, stream: str = "stdout") -> None:
+            if line.startswith("JSON_EVENT:"):
+                try:
+                    payload = json.loads(line[len("JSON_EVENT:"):])
+                    # If it's a live sample event, emit it as a tool result so UI updates
+                    if payload.get("kind") == "sample":
+                        await self._emit(PipelineMessage(
+                            type=MessageType.TOOL_RESULT,
+                            message=f"Live sample: {payload.get('stage')}",
+                            data={"live_sample": payload}
+                        ))
+                        return
+                except Exception:
+                    pass
+            
             await self._emit(PipelineMessage(
                 type=MessageType.SCRIPT_LOG, message=line, data={"stream": stream}
             ))
