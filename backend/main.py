@@ -295,12 +295,79 @@ async def list_datasets():
             if d.is_dir():
                 processed_dir = d / "processed"
                 if processed_dir.exists():
+                    # Try to get metadata from report
+                    report_file = processed_dir / "preprocessing_report.json"
+                    metadata = {}
+                    if report_file.exists():
+                        try:
+                            report = json.loads(report_file.read_text(encoding="utf-8"))
+                            metadata["resolution"] = report.get("plan", {}).get("augmentations", ["224"])[0] # e.g. "resize_224"
+                            if "resize_" in str(metadata["resolution"]):
+                                metadata["resolution"] = metadata["resolution"].replace("resize_", "")
+                            else:
+                                metadata["resolution"] = "224"
+                            
+                            metadata["num_classes"] = len(report.get("class_distribution", {}))
+                            metadata["image_count"] = report.get("after_stats", {}).get("images", 0)
+                        except Exception:
+                            pass
+                    
+                    if not metadata.get("num_classes"):
+                        classes = [cls.name for cls in processed_dir.iterdir() if cls.is_dir()]
+                        metadata["num_classes"] = len(classes)
+                        metadata["image_count"] = sum(len(list(cls.glob("*"))) for cls in processed_dir.iterdir() if cls.is_dir())
+                    
                     datasets.append({
                         "id": d.name,
-                        "path": str(processed_dir),
-                        "name": d.name.replace("_", " ").title()
+                        "path": str(processed_dir.absolute()),
+                        "name": d.name.replace("_", " ").title(),
+                        "metadata": metadata
                     })
     return datasets
+
+
+@app.get("/api/dataset/inspect", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def inspect_dataset(path: str):
+    """Sample images from a dataset directory to detect real image dimensions and class info."""
+    import random as _random
+    from PIL import Image as _Image
+    ds_path = Path(path)
+    if not ds_path.exists():
+        raise HTTPException(status_code=404, detail="Dataset path not found.")
+    
+    classes = [d for d in ds_path.iterdir() if d.is_dir()]
+    if not classes:
+        raise HTTPException(status_code=400, detail="Dataset has no class subdirectories.")
+    
+    # Sample up to 5 images across classes to detect resolution
+    sampled_sizes: list[tuple[int, int]] = []
+    for cls_dir in classes[:5]:
+        images = list(cls_dir.glob("*.jpg")) + list(cls_dir.glob("*.png")) + list(cls_dir.glob("*.jpeg"))
+        if images:
+            try:
+                sample = _random.choice(images)
+                with _Image.open(sample) as im:
+                    sampled_sizes.append((im.width, im.height))
+            except Exception:
+                pass
+    
+    if sampled_sizes:
+        avg_w = int(sum(w for w, _ in sampled_sizes) / len(sampled_sizes))
+        avg_h = int(sum(h for _, h in sampled_sizes) / len(sampled_sizes))
+    else:
+        avg_w, avg_h = 224, 224
+
+    total_images = sum(len(list(cls_dir.glob("*.jpg")) + list(cls_dir.glob("*.png")) + list(cls_dir.glob("*.jpeg"))) for cls_dir in classes)
+    return {
+        "path": path,
+        "num_classes": len(classes),
+        "class_names": [c.name for c in classes],
+        "total_images": total_images,
+        "sample_width": avg_w,
+        "sample_height": avg_h,
+        "resolution": f"{avg_w}x{avg_h}",
+    }
+
 
 
 @app.post("/api/dataset/search", response_model=DatasetSearchResponse, tags=["dataset"], dependencies=[Depends(get_current_user)])
@@ -723,9 +790,10 @@ async def _run_training_process(run_id: str, run_dir: Path) -> None:
 
         def _worker():
             try:
+                abs_run_dir = run_dir.absolute()
                 proc = subprocess.Popen(
-                    [sys.executable, str(run_dir / "train.py")],
-                    cwd=str(run_dir),
+                    [sys.executable, str(abs_run_dir / "train.py")],
+                    cwd=str(abs_run_dir),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     env={**os.environ, "PYTHONUNBUFFERED": "1"},
@@ -844,14 +912,18 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
     from backend.builder.code_generator import PyTorchCodeGenerator
 
     run_id = uuid4().hex[:12]
+    logger.info("Initializing training run %s (task_type=%s)", run_id, request.task_type)
     
     try:
         generator = PyTorchCodeGenerator()
+        logger.info("Compiling graph for run %s", run_id)
         compile_result = generator.generate(request.nodes, request.edges)
         
         if request.compare_mode and request.raw_dataset_path:
+            logger.info("Compare mode enabled for run %s", run_id)
             run_id_curated = f"{run_id}_curated"
             run_dir_curated = Path("./runs") / run_id_curated
+            run_dir_curated.mkdir(parents=True, exist_ok=True)
             config_curated = write_training_runtime(
                 run_dir=run_dir_curated,
                 model_code=compile_result["code"],
@@ -874,6 +946,7 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
             
             run_id_raw = f"{run_id}_raw"
             run_dir_raw = Path("./runs") / run_id_raw
+            run_dir_raw.mkdir(parents=True, exist_ok=True)
             config_raw = write_training_runtime(
                 run_dir=run_dir_raw,
                 model_code=compile_result["code"],
@@ -919,6 +992,7 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
             
         else:
             run_dir = Path("./runs") / run_id
+            logger.info("Writing training runtime to %s", run_dir)
             config = write_training_runtime(
                 run_dir=run_dir,
                 model_code=compile_result["code"],
@@ -938,11 +1012,12 @@ async def builder_train(request: BuilderTrainRequest) -> BuilderTrainResponse:
                 "clients": set(),
                 "created_at": datetime.utcnow().isoformat(),
             }
+            logger.info("Spawning training process for run %s", run_id)
             asyncio.create_task(_run_training_process(run_id, run_dir))
             return BuilderTrainResponse(run_id=run_id, task_type=request.task_type)
             
     except Exception as exc:
-        logger.exception("Failed to initialize training run %s", run_id)
+        logger.exception("CRITICAL: Failed to initialize training run %s", run_id)
         raise HTTPException(status_code=500, detail=f"Failed to initialize training run: {exc}") from exc
 
 

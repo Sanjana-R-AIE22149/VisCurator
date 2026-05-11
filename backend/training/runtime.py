@@ -17,11 +17,19 @@ def _detect_task_metadata(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     height = parts[0] if len(parts) >= 1 else 224
     width = parts[1] if len(parts) >= 2 else height
 
+    def _safe_int(val: Any, default: int) -> int:
+        try:
+            if val is None or val == "":
+                return default
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
     return {
-        "input_channels": int(input_data.get("channels", 3) or 3),
+        "input_channels": _safe_int(input_data.get("channels"), 3),
         "input_height": height,
         "input_width": width,
-        "num_classes": int(output_data.get("num_classes", 10) or 10),
+        "num_classes": _safe_int(output_data.get("num_classes"), 10),
     }
 
 
@@ -34,7 +42,12 @@ def write_training_runtime(
     epochs: int | None = None,
     num_images: int | None = None,
 ) -> dict[str, Any]:
+    import logging
+    logger = logging.getLogger("viscurator.training")
+    
+    logger.info("Detecting task metadata from %d nodes", len(nodes))
     metadata = _detect_task_metadata(nodes)
+    logger.info("Metadata detected: %s", metadata)
     
     if epochs is None:
         epochs = 6 if task_type == "mnist_classification" else 8
@@ -44,15 +57,23 @@ def write_training_runtime(
         "task_type": task_type,
         "epochs": epochs,
         "num_images": num_images,
-        "batch_size": 32,
+        "batch_size": 4,  # safe default for CPU; loader will use micro-batches
         "dataset_path": dataset_path,
         **metadata,
     }
 
+    logger.info("Creating run directory: %s", run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    
+    logger.info("Writing model.py")
     (run_dir / "model.py").write_text(model_code, encoding="utf-8")
+    
+    logger.info("Writing config.json")
     (run_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+    
+    logger.info("Writing train.py")
     (run_dir / "train.py").write_text(_build_train_script(), encoding="utf-8")
+    
     return config
 
 
@@ -160,6 +181,13 @@ def _build_train_script() -> str:
                 except Exception:
                     pass
 
+            # Use small batch sizes for CPU to prevent OOM
+            batch_size = config["batch_size"]
+            if device == "cpu":
+                batch_size = min(batch_size, 4)
+            # Gradient accumulation steps so effective batch ~= 16
+            accum_steps = max(1, 16 // batch_size)
+
             # Load real dataset if available
             train_loader, val_loader = None, None
             using_real_data = False
@@ -180,23 +208,26 @@ def _build_train_script() -> str:
                         T.ToTensor(),
                         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
                     ])
-                    full = ImageFolder(ds_path, transform=tf)
-                    
-                    if config.get("num_images"):
-                        limit = min(len(full), config["num_images"])
-                        full, _ = random_split(full, [limit, len(full) - limit])
-                        
-                    n_val = max(1, int(len(full) * 0.2))
-                    n_train = len(full) - n_val
-                    train_ds, val_ds = random_split(full, [n_train, n_val])
-                    # Apply val transform to val split
-                    val_ds.dataset.transform = val_tf
-                    num_classes = len(full.classes)
+                    full_train = ImageFolder(ds_path, transform=tf)
+                    full_val = ImageFolder(ds_path, transform=val_tf)
+                    num_classes = len(full_train.classes)
                     config["num_classes"] = num_classes
-                    train_loader = DataLoader(train_ds, batch_size=config["batch_size"], shuffle=True, num_workers=0)
-                    val_loader   = DataLoader(val_ds,   batch_size=config["batch_size"], shuffle=False, num_workers=0)
+                    
+                    indices = torch.randperm(len(full_train)).tolist()
+                    if config.get("num_images"):
+                        indices = indices[:config["num_images"]]
+                        
+                    n_val = max(1, int(len(indices) * 0.2))
+                    n_train = len(indices) - n_val
+                    
+                    from torch.utils.data import Subset
+                    train_ds = Subset(full_train, indices[:n_train])
+                    val_ds = Subset(full_val, indices[n_train:])
+                    
+                    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=False)
+                    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=False)
                     using_real_data = True
-                    emit_event("log", f"Loaded real dataset: {len(full)} images, {num_classes} classes, {n_train} train / {n_val} val")
+                    emit_event("log", f"Loaded real dataset: {len(indices)} images, {num_classes} classes, {n_train} train / {n_val} val")
                 else:
                     raise ValueError("No real dataset path")
             except Exception as ex:
@@ -204,8 +235,8 @@ def _build_train_script() -> str:
                 synth = SyntheticDataset(80, config["input_channels"], config["input_height"], config["input_width"], config["num_classes"])
                 n_val = max(1, int(len(synth) * 0.2))
                 train_ds, val_ds = random_split(synth, [len(synth) - n_val, n_val])
-                train_loader = DataLoader(train_ds, batch_size=config["batch_size"], shuffle=True)
-                val_loader   = DataLoader(val_ds,   batch_size=config["batch_size"], shuffle=False)
+                train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+                val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False)
 
             # Build model
             try:
@@ -219,8 +250,9 @@ def _build_train_script() -> str:
             except Exception as e:
                 emit_event("log", f"Model wrap failed: {e}. Using linear fallback.")
                 model = nn.Sequential(
+                    nn.AdaptiveAvgPool2d((1, 1)),
                     nn.Flatten(),
-                    nn.Linear(config["input_channels"] * config["input_height"] * config["input_width"], config["num_classes"])
+                    nn.Linear(config["input_channels"], config["num_classes"])
                 ).to(device)
 
             opt = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -233,14 +265,19 @@ def _build_train_script() -> str:
                     model.train()
                     total_loss = 0.0
                     n_batches = 0
-                    for imgs, labels in train_loader:
+                    opt.zero_grad()
+                    for step, (imgs, labels) in enumerate(train_loader):
                         imgs, labels = imgs.to(device), labels.to(device)
-                        opt.zero_grad()
-                        loss = crit(model(imgs), labels)
+                        loss = crit(model(imgs), labels) / accum_steps
                         loss.backward()
-                        opt.step()
-                        total_loss += loss.item()
+                        if (step + 1) % accum_steps == 0 or (step + 1) == len(train_loader):
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                            opt.step()
+                            opt.zero_grad()
+                        total_loss += loss.item() * accum_steps
                         n_batches += 1
+                        # Free memory on CPU
+                        del imgs, labels, loss
                     avg_loss = total_loss / max(n_batches, 1)
                     scheduler.step()
 

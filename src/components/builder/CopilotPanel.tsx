@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Bot, Zap, AlertTriangle, ChevronRight, X, Copy, Check, Download } from 'lucide-react';
 import { streamCopilotAnalysis, compileGraph, type CompileResult } from '../../lib/copilot';
-import { connectTrainingWebSocket, getHealth, startTrainingRun, getLocalDatasets, type PipelineMessage, type DatasetInfo } from '../../lib/api';
+import { connectTrainingWebSocket, getHealth, startTrainingRun, getLocalDatasets, inspectDataset, type PipelineMessage, type DatasetInfo } from '../../lib/api';
 
 function highlightPython(code: string): React.ReactNode[] {
   const lines = code.split('\n');
@@ -86,6 +86,7 @@ export default function CopilotPanel() {
     isTraining,
     trainingRunId,
     preprocessingReport,
+    updateNodeData,
   } = useAppStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -113,10 +114,62 @@ export default function CopilotPanel() {
         if (ds.length > 0) {
           const recentPath = preprocessingReport?.output_dir || ds[ds.length - 1].path;
           setSelectedDatasetPath(recentPath);
+          
+          // Auto-sync if it's already set to custom_curated
+          if (useAppStore.getState().trainingTaskType === 'custom_curated') {
+            const match = ds.find(d => d.path === recentPath);
+            if (match && match.metadata) {
+              const inputNode = nodes.find(n => n.type === 'inputNode');
+              if (inputNode) {
+                const res = match.metadata.resolution ? `${match.metadata.resolution}×${match.metadata.resolution}` : '224×224';
+                updateNodeData(inputNode.id, { resolution: res });
+              }
+              const outputNode = nodes.find(n => n.type === 'outputNode');
+              if (outputNode && match.metadata.num_classes) {
+                updateNodeData(outputNode.id, { num_classes: match.metadata.num_classes });
+              }
+            }
+          }
         }
       })
       .catch(err => console.log('Failed to fetch datasets', err));
-  }, [preprocessingReport]);
+  }, [preprocessingReport, updateNodeData, nodes]); // nodes added for finding input/output on load
+
+  // When a custom dataset is selected, inspect it to get real resolution & class count
+  useEffect(() => {
+    if (trainingTaskType !== 'custom_curated' || !selectedDatasetPath) return;
+    inspectDataset(selectedDatasetPath)
+      .then(info => {
+        const inputNode = nodes.find(n => n.type === 'inputNode');
+        if (inputNode) {
+          const w = info.sample_width;
+          const h = info.sample_height;
+          updateNodeData(inputNode.id, { resolution: `${w}×${h}` });
+        }
+        const outputNode = nodes.find(n => n.type === 'outputNode');
+        if (outputNode) {
+          updateNodeData(outputNode.id, { num_classes: info.num_classes });
+        }
+      })
+      .catch(() => {/* ignore, don't break UI */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDatasetPath, trainingTaskType]);
+
+  const handleDatasetChange = (path: string) => {
+    setSelectedDatasetPath(path);
+    const ds = localDatasets.find(d => d.path === path);
+    if (ds && ds.metadata) {
+      const inputNode = nodes.find(n => n.type === 'inputNode');
+      if (inputNode) {
+        const res = ds.metadata.resolution ? `${ds.metadata.resolution}×${ds.metadata.resolution}` : '224×224';
+        updateNodeData(inputNode.id, { resolution: res });
+      }
+      const outputNode = nodes.find(n => n.type === 'outputNode');
+      if (outputNode && ds.metadata.num_classes) {
+        updateNodeData(outputNode.id, { num_classes: ds.metadata.num_classes });
+      }
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -424,7 +477,7 @@ export default function CopilotPanel() {
                   <span className="text-[9px] uppercase tracking-widest text-slate-500">Dataset</span>
                   <select
                     value={selectedDatasetPath}
-                    onChange={(e) => setSelectedDatasetPath(e.target.value)}
+                    onChange={(e) => handleDatasetChange(e.target.value)}
                     className="w-full mt-1 rounded bg-slate-900 border border-slate-700 px-2 py-1.5 text-[11px] text-slate-200"
                   >
                     {localDatasets.length === 0 && <option value="">No datasets found</option>}

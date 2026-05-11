@@ -310,7 +310,13 @@ class CVAgentModel(nn.Module):
             elif kind == "linear":
                 if not is_flat:
                     in_f = in_c * in_h * in_w
-                    forward_lines.append(f"        x = x.flatten(1) # {in_c}x{in_h}x{in_w} -> {in_f}")
+                    if in_h > 1 and in_w > 1 and in_f > 65536:
+                        warnings.append(f"Auto-fixed excessive flatten size {in_f} -> {in_c} via AdaptiveAvgPool2d((1, 1)) before Linear layer.")
+                        init_lines.append(f"        self.{var}_pool = nn.AdaptiveAvgPool2d((1, 1))")
+                        forward_lines.append(f"        x = self.{var}_pool(x).flatten(1)")
+                        in_f = in_c
+                    else:
+                        forward_lines.append(f"        x = x.flatten(1) # {in_c}x{in_h}x{in_w} -> {in_f}")
                     is_flat = True
                 else:
                     in_f = in_c
@@ -324,9 +330,19 @@ class CVAgentModel(nn.Module):
                 embed, heads = spec["embed_dim"], spec["heads"]
                 if not is_flat:
                     in_f = in_c * in_h * in_w
+                    if in_h > 1 and in_w > 1 and in_f > 65536:
+                        warnings.append(f"Auto-fixed excessive flatten size {in_f} -> {in_c} via AdaptiveAvgPool2d((1, 1)) before Attention layer.")
+                        init_lines.append(f"        self.{var}_pool = nn.AdaptiveAvgPool2d((1, 1))")
+                        forward_lines.append(f"        x = self.{var}_pool(x).flatten(1)")
+                        in_f = in_c
+                    else:
+                        forward_lines.append(f"        x = x.flatten(1)")
                     init_lines.append(f"        self.{var}_proj = nn.Linear({in_f}, {embed})")
-                    forward_lines.append(f"        x = self.{var}_proj(x.flatten(1))")
+                    forward_lines.append(f"        x = self.{var}_proj(x)")
                     is_flat = True
+                else:
+                    init_lines.append(f"        self.{var}_proj = nn.Linear({in_c}, {embed})")
+                    forward_lines.append(f"        x = self.{var}_proj(x)")
                 init_lines.append(f"        self.{var} = nn.MultiheadAttention({embed}, {heads}, batch_first=True)")
                 forward_lines.append(f"        x, _ = self.{var}(x.unsqueeze(1), x.unsqueeze(1), x.unsqueeze(1)); x = x.squeeze(1)")
                 param_count += (4 * embed * embed + 4 * embed)

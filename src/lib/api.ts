@@ -174,6 +174,11 @@ export interface DatasetInfo {
   id: string;
   path: string;
   name: string;
+  metadata?: {
+    resolution?: string;
+    num_classes?: number;
+    image_count?: number;
+  };
 }
 
 export async function getLocalDatasets(): Promise<DatasetInfo[]> {
@@ -181,6 +186,24 @@ export async function getLocalDatasets(): Promise<DatasetInfo[]> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error('Failed to fetch datasets');
+  return res.json();
+}
+
+export interface DatasetInspection {
+  path: string;
+  num_classes: number;
+  class_names: string[];
+  total_images: number;
+  sample_width: number;
+  sample_height: number;
+  resolution: string;
+}
+
+export async function inspectDataset(path: string): Promise<DatasetInspection> {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/inspect?path=${encodeURIComponent(path)}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to inspect dataset');
   return res.json();
 }
 
