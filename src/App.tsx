@@ -8,6 +8,7 @@ import DatasetPage from './pages/DatasetPage';
 import BuilderPage from './pages/BuilderPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import LibraryPage from './pages/LibraryPage';
+import AnnotatorPage from './pages/AnnotatorPage';
 import BootScreen from './components/ui/BootScreen';
 
 /* ── Settings placeholder (stub) ── */
@@ -46,6 +47,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="dataset" element={<DatasetPage />} />
+            <Route path="annotator" element={<AnnotatorPage />} />
             <Route path="builder" element={<BuilderPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="library" element={<LibraryPage />} />

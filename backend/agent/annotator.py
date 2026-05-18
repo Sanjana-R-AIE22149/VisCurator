@@ -42,16 +42,25 @@ def main() -> None:
     parser.add_argument("--job-id", required=True)
     parser.add_argument("--raw-dir", required=True)
     parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--min-confidence", type=float, default=0.30,
+                        help="CLIP cosine similarity threshold (0–1). Below this → low_confidence/")
+    parser.add_argument("--blur-threshold", type=float, default=80.0,
+                        help="Laplacian variance threshold. Images below this are rejected as blurry.")
     args = parser.parse_args()
 
     raw_dir = Path(args.raw_dir)
     out_dir = Path(args.out_dir)
     seed_dir = out_dir / "seeds"
-    
+    min_confidence: float = args.min_confidence
+
     samples_dir = out_dir / "samples"
+    blur_rejected_dir  = out_dir / "blur_rejected"    # full collection for augmenter
+    low_confidence_dir = out_dir / "low_confidence"   # images below threshold
     (samples_dir / "raw").mkdir(parents=True, exist_ok=True)
     (samples_dir / "filtered").mkdir(parents=True, exist_ok=True)
     (samples_dir / "processed").mkdir(parents=True, exist_ok=True)
+    blur_rejected_dir.mkdir(parents=True, exist_ok=True)
+    low_confidence_dir.mkdir(parents=True, exist_ok=True)
 
     if not seed_dir.exists() or not any(seed_dir.iterdir()):
         emit_event("error", "No seeds uploaded. Please define classes and upload seeds first.")
@@ -123,9 +132,12 @@ def main() -> None:
     report = {
         "job_id": args.job_id,
         "classes": classes,
+        "min_confidence": min_confidence,
         "class_counts": {c: 0 for c in classes},
         "confidence_distribution": {"high": 0, "medium": 0, "low": 0},
-        "annotated_samples": []
+        "low_confidence_count": 0,
+        "annotated_samples": [],    # up to 24 entries for the preview grid
+        "low_confidence_samples": [],
     }
     
     preprocess_report = {
@@ -144,8 +156,8 @@ def main() -> None:
     }
 
     seen_hashes = set()
-    BLUR_THRESHOLD_LARGE = 80.0
-    BLUR_THRESHOLD_SMALL = 8.0
+    BLUR_THRESHOLD_LARGE: float = args.blur_threshold
+    BLUR_THRESHOLD_SMALL: float = args.blur_threshold / 10.0  # proportional for tiny images (<128px)
 
     # 2. Process, Clean, Classify, and Segment
     for idx, img_path in enumerate(all_images):
@@ -180,6 +192,11 @@ def main() -> None:
                     fname = f"filtered_{idx:05d}.jpg"
                     raw_img.save(samples_dir / "filtered" / fname, "JPEG", quality=85)
                     preprocess_report["stage_samples"]["filtered"].append({"url": f"samples/filtered/{fname}", "label": "unlabeled", "reason": reason, "id": idx})
+                
+                # Always save blurry images (not duplicates) for the augmenter
+                if is_blurry and not is_dup:
+                    br_fname = f"blur_{idx:05d}.jpg"
+                    raw_img.save(blur_rejected_dir / br_fname, "JPEG", quality=92)
                 continue
                 
             seen_hashes.add(img_hash)
@@ -194,49 +211,69 @@ def main() -> None:
                 best_idx = similarities.argmax().item()
                 best_score = similarities[best_idx].item()
                 assigned_class = classes[best_idx]
-            
+
+            # --- CONFIDENCE THRESHOLD GATE ---
+            if best_score < min_confidence:
+                # Save to low_confidence/ for human review instead of train/
+                lc_class_dir = low_confidence_dir / assigned_class
+                lc_class_dir.mkdir(parents=True, exist_ok=True)
+                lc_name = f"lc_{idx:05d}.jpg"
+                raw_img.save(lc_class_dir / lc_name, "JPEG", quality=90)
+                report["low_confidence_count"] += 1
+                if len(report["low_confidence_samples"]) < 12:
+                    report["low_confidence_samples"].append({
+                        "url": f"low_confidence/{assigned_class}/{lc_name}",
+                        "label": assigned_class,
+                        "confidence": round(best_score, 2),
+                    })
+                if idx % 10 == 0 or idx == total_imgs - 1:
+                    progress = int((idx + 1) / total_imgs * 100)
+                    emit_event("progress", f"Processed {idx+1}/{total_imgs} images", progress=progress)
+                continue
+
             # --- SEGMENTATION (SAM) ---
             w, h = raw_img.size
-            input_points = [[[w // 2, h // 2]]] 
+            input_points = [[[w // 2, h // 2]]]
             sam_inputs = sam_processor(raw_img, input_points=input_points, return_tensors="pt").to(device)
-            
+
             with torch.no_grad():
                 sam_outputs = sam_model(**sam_inputs)
-                
+
             masks = sam_processor.image_processor.post_process_masks(
                 sam_outputs.pred_masks.cpu(), sam_inputs["original_sizes"].cpu(), sam_inputs["reshaped_input_sizes"].cpu()
             )
-            
+
             best_mask = masks[0][0][0].numpy()
-            
+
             masked_np = np.array(raw_img)
             white_bg = np.ones_like(masked_np) * 255
             masked_img_np = np.where(best_mask[:, :, None], masked_np, white_bg)
             final_img = Image.fromarray(masked_img_np.astype(np.uint8))
-            
+
             save_name = f"anno_{idx:05d}.jpg"
             save_path = train_dir / assigned_class / save_name
             final_img.save(save_path, "JPEG", quality=90)
-            
+
             # Update Stats
             preprocess_report["after_stats"]["images"] += 1
             preprocess_report["after_stats"]["class_distribution"][assigned_class] = preprocess_report["after_stats"]["class_distribution"].get(assigned_class, 0) + 1
-            
+
             if len(preprocess_report["stage_samples"]["processed"]) < 5:
                 fname = f"proc_{idx:05d}.jpg"
                 final_img.save(samples_dir / "processed" / fname, "JPEG", quality=85)
                 preprocess_report["stage_samples"]["processed"].append({"url": f"samples/processed/{fname}", "label": assigned_class, "id": idx})
-            
+
             report["class_counts"][assigned_class] += 1
-            if best_score > 0.8: report["confidence_distribution"]["high"] += 1
+            if best_score > 0.8:   report["confidence_distribution"]["high"]   += 1
             elif best_score > 0.5: report["confidence_distribution"]["medium"] += 1
-            else: report["confidence_distribution"]["low"] += 1
-            
-            if len(report["annotated_samples"]) < 12:
+            else:                  report["confidence_distribution"]["low"]    += 1
+
+            if len(report["annotated_samples"]) < 24:   # 24 entries for preview grid
                 report["annotated_samples"].append({
                     "url": f"train/{assigned_class}/{save_name}",
                     "label": assigned_class,
-                    "confidence": round(best_score, 2)
+                    "confidence": round(best_score, 2),
+                    "confidence_band": "high" if best_score > 0.8 else "medium" if best_score > 0.5 else "low",
                 })
 
             if idx % 10 == 0 or idx == total_imgs - 1:
@@ -249,13 +286,23 @@ def main() -> None:
     # Write reports
     anno_report_path = out_dir / "annotation_report.json"
     anno_report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    
+
     prep_report_path = out_dir / "preprocessing_report.json"
     prep_report_path.write_text(json.dumps(preprocess_report, indent=2), encoding="utf-8")
-    
-    # Emit the preprocess report event so the UI can catch it
+
+    # Emit the preprocess report so the UI can catch it
     emit_event("report", "Pipeline finished", **preprocess_report)
-    emit_event("completed", "Auto-annotation finished successfully.", report_path=str(anno_report_path))
+
+    # Embed the full annotation report in the completed event so the
+    # frontend preview grid can render immediately without an extra fetch
+    emit_event(
+        "completed",
+        f"Auto-annotation finished. {preprocess_report['after_stats']['images']} annotated, "
+        f"{report['low_confidence_count']} low-confidence, "
+        f"{preprocess_report['after_stats']['blur_filtered']} blur-rejected.",
+        report_path=str(anno_report_path),
+        annotation_report=report,
+    )
 
 if __name__ == "__main__":
     try:

@@ -257,14 +257,23 @@ export async function uploadSeedClass(jobId: string, className: string, files: F
   console.log('[API RES] uploadSeedClass OK');
 }
 
-export async function startAnnotation(jobId: string): Promise<void> {
-  console.log('[API REQ] startAnnotation:', { jobId });
+export async function startAnnotation(
+  jobId: string,
+  minConfidence = 0.30,
+  blurThreshold = 80.0,
+): Promise<void> {
+  console.log('[API REQ] startAnnotation:', { jobId, minConfidence, blurThreshold });
   const res = await apiFetch(`${BASE_URL}/api/dataset/annotate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ job_id: jobId, seeds: {} }),
+    body: JSON.stringify({
+      job_id:          jobId,
+      seeds:           {},
+      min_confidence:  minConfidence,
+      blur_threshold:  blurThreshold,
+    }),
   });
-  
+
   if (!res.ok) {
     console.error('[API RES] startAnnotation FAIL:', res.status);
     let detail = '';
@@ -276,6 +285,88 @@ export async function startAnnotation(jobId: string): Promise<void> {
     }
     throw new Error(`Backend returned ${res.status}${detail ? ': ' + detail : ''}`);
   }
+}
+
+export interface AugmentOptions {
+  nAug?: number;
+  targetSize?: number;
+}
+
+export interface AnnotatedSample {
+  url: string;
+  label: string;
+  confidence: number;
+  confidence_band: 'high' | 'medium' | 'low';
+}
+
+export interface AnnotationReport {
+  job_id: string;
+  classes: string[];
+  min_confidence: number;
+  class_counts: Record<string, number>;
+  confidence_distribution: { high: number; medium: number; low: number };
+  low_confidence_count: number;
+  annotated_samples: AnnotatedSample[];
+  low_confidence_samples: AnnotatedSample[];
+}
+
+export async function getAnnotationReport(jobId: string): Promise<AnnotationReport> {
+  const res = await apiFetch(`${BASE_URL}/api/dataset/annotation-report/${jobId}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Annotation report not found (${res.status})`);
+  return res.json();
+}
+
+/**
+ * Triggers a browser download of the augmented dataset ZIP.
+ * Uses a direct fetch + blob URL so the token is sent as a header
+ * (avoids leaking it in the URL bar).
+ */
+export async function downloadAugmentedDataset(jobId: string): Promise<void> {
+  console.log('[API REQ] downloadAugmentedDataset:', { jobId });
+  const res = await apiFetch(`${BASE_URL}/api/dataset/download-augmented/${jobId}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `augmented_${jobId.slice(0, 8)}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function startAugmentation(jobId: string, options: AugmentOptions = {}): Promise<{ out_dir: string }> {
+  console.log('[API REQ] startAugmentation:', { jobId, options });
+  const res = await apiFetch(`${BASE_URL}/api/dataset/augment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({
+      job_id:      jobId,
+      n_aug:       options.nAug      ?? 4,
+      target_size: options.targetSize ?? 224,
+    }),
+  });
+
+  if (!res.ok) {
+    console.error('[API RES] startAugmentation FAIL:', res.status);
+    let detail = '';
+    try {
+      const errData = await res.json();
+      detail = errData.detail || errData.message || '';
+    } catch { /* ignore */ }
+    throw new Error(`Backend returned ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  const data = await res.json();
+  console.log('[API RES] startAugmentation OK:', data);
+  return data;
 }
 
 export async function getDatasetJobs(): Promise<JobListItem[]> {

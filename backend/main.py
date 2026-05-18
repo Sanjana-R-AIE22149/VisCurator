@@ -5,11 +5,13 @@ VisCurator / CVAgent — FastAPI Backend
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
 import site
 import sys
+import zipfile
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -515,7 +517,14 @@ async def annotate_dataset(req: DatasetAnnotateRequest) -> dict[str, Any]:
         def _worker():
             try:
                 proc = subprocess.Popen(
-                    [sys.executable, str(script_path), "--job-id", job_id_str, "--raw-dir", str(raw_dir), "--out-dir", str(base_dir)],
+                    [
+                        sys.executable, str(script_path),
+                        "--job-id",         job_id_str,
+                        "--raw-dir",        str(raw_dir),
+                        "--out-dir",        str(base_dir),
+                        "--min-confidence", str(req.min_confidence),
+                        "--blur-threshold", str(req.blur_threshold),
+                    ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                 )
@@ -567,6 +576,222 @@ async def annotate_dataset(req: DatasetAnnotateRequest) -> dict[str, Any]:
     # Spawn in background so API returns immediately
     asyncio.create_task(run_annotator())
     return {"status": "started", "job_id": job_id_str}
+
+
+@app.get("/api/dataset/annotation-report/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def get_annotation_report(job_id: str) -> dict[str, Any]:
+    """Return the annotation_report.json for a completed annotation job."""
+    try:
+        job_uuid = UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+
+    slug     = f"local_{job_uuid.hex[:8]}"
+    report_path = Path("./cvagent_output") / slug / "annotation_report.json"
+
+    if not report_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Annotation report not found for job {job_id}. Run annotation first."
+        )
+    try:
+        return json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read report: {exc}")
+
+
+# ── Anti-Blur + Augmentation endpoint ────────────────────────────────────────
+
+@app.post("/api/dataset/augment", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def augment_blurry(req: dict) -> dict[str, Any]:
+    """
+    Trigger the anti-blur recovery + augmentation pipeline for a job.
+    Scans the blur-rejected images (from the annotator's samples/filtered/ dir)
+    and produces sharpened + augmented variants in <base_dir>/augmented/.
+
+    Body JSON:
+      {
+        "job_id": "<uuid>",
+        "n_aug":  4,           // optional, default 4
+        "target_size": 224     // optional, default 224
+      }
+    """
+    job_id_str = req.get("job_id", "")
+    if not job_id_str:
+        raise HTTPException(status_code=400, detail="job_id is required")
+
+    n_aug       = int(req.get("n_aug", 4))
+    target_size = int(req.get("target_size", 224))
+
+    try:
+        job_uuid = UUID(job_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+
+    slug     = f"local_{job_uuid.hex[:8]}"
+    base_dir = Path("./cvagent_output") / slug
+    out_dir  = base_dir / "augmented"
+
+    if not base_dir.exists():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job directory not found: {base_dir}. Run annotation first."
+        )
+
+    async def _emit_aug(msg: PipelineMessage):
+        history = job_logs.setdefault(job_uuid, [])
+        history.append(msg)
+        if len(history) > 500:
+            history.pop(0)
+        await manager.broadcast(job_id_str, msg.ws_dict())
+
+    async def run_augmenter():
+        await _emit_aug(PipelineMessage(
+            type=MessageType.LOG,
+            message=f"Starting Anti-Blur + Augmentation pipeline (n_aug={n_aug}, size={target_size})…"
+        ))
+
+        script_path = Path(__file__).resolve().parent / "agent" / "augmenter.py"
+
+        import threading
+        import subprocess
+
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _worker():
+            try:
+                proc = subprocess.Popen(
+                    [
+                        sys.executable, str(script_path),
+                        "--job-id",      job_id_str,
+                        "--base-dir",    str(base_dir),
+                        "--out-dir",     str(out_dir),
+                        "--n-aug",       str(n_aug),
+                        "--target-size", str(target_size),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                if proc.stdout:
+                    for raw_line in proc.stdout:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip()
+                        if line:
+                            loop.call_soon_threadsafe(queue.put_nowait, line)
+                proc.wait()
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", proc.returncode))
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", 1))
+                logger.error("Augmenter subprocess failed: %s", exc)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        exit_code = 0
+        while True:
+            item = await queue.get()
+            if isinstance(item, tuple) and item[0] == "DONE":
+                exit_code = item[1]
+                break
+
+            line = str(item)
+            if line.startswith("AUG_EVENT:"):
+                try:
+                    payload = json.loads(line[len("AUG_EVENT:"):])
+                    evt = payload.get("event", "log")
+                    msg_text = payload.get("message", "")
+                    if evt == "started":
+                        await _emit_aug(PipelineMessage(type=MessageType.LOG, message=f"Augmenter: {msg_text}"))
+                    elif evt == "progress":
+                        await _emit_aug(PipelineMessage(type=MessageType.LOG, message=msg_text, data=payload))
+                    elif evt == "completed":
+                        await _emit_aug(PipelineMessage(type=MessageType.DONE, message=msg_text, data={"augmentation_report": payload}))
+                    elif evt == "error":
+                        await _emit_aug(PipelineMessage(type=MessageType.ERROR, message=msg_text))
+                    elif evt == "warning":
+                        await _emit_aug(PipelineMessage(type=MessageType.LOG, message=f"⚠ {msg_text}"))
+                    else:
+                        await _emit_aug(PipelineMessage(type=MessageType.SCRIPT_LOG, message=msg_text))
+                except Exception:
+                    await _emit_aug(PipelineMessage(type=MessageType.SCRIPT_LOG, message=line))
+            else:
+                await _emit_aug(PipelineMessage(type=MessageType.SCRIPT_LOG, message=line))
+
+        if exit_code != 0:
+            await _emit_aug(PipelineMessage(type=MessageType.ERROR, message=f"Augmenter exited with code {exit_code}"))
+        else:
+            # Attempt to read the summary report and broadcast it
+            report_path = out_dir / "augmentation_report.json"
+            if report_path.exists():
+                try:
+                    report = json.loads(report_path.read_text(encoding="utf-8"))
+                    await _emit_aug(PipelineMessage(
+                        type=MessageType.TOOL_RESULT,
+                        message="Augmentation report ready.",
+                        data={"augmentation_report": report}
+                    ))
+                except Exception:
+                    pass
+
+    asyncio.create_task(run_augmenter())
+    return {"status": "started", "job_id": job_id_str, "out_dir": str(out_dir)}
+
+
+# ── Download Augmented Dataset ────────────────────────────────────────────────
+
+@app.get("/api/dataset/download-augmented/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def download_augmented(job_id: str):
+    """
+    Streams a ZIP archive containing:
+      augmented/   — albumentations-generated variants
+      recovered/   — anti-blurred originals
+    Falls back to packaging blur_rejected/ if augmentation hasn't run yet.
+    """
+    from fastapi.responses import StreamingResponse
+
+    try:
+        job_uuid = UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+
+    slug     = f"local_{job_uuid.hex[:8]}"
+    base_dir = Path("./cvagent_output") / slug
+
+    # Folders to include in the ZIP (only ones that exist)
+    candidates = [
+        base_dir / "augmented" / "augmented",
+        base_dir / "augmented" / "recovered",
+        base_dir / "blur_rejected",   # fallback if augmenter hasn't run
+    ]
+    source_dirs = [d for d in candidates if d.exists() and any(d.iterdir())]
+
+    if not source_dirs:
+        raise HTTPException(
+            status_code=404,
+            detail="No augmented or blur-rejected images found. Run augmentation first."
+        )
+
+    def zip_generator():
+        """Yield ZIP bytes chunk by chunk so we don't load everything into RAM."""
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for src_dir in source_dirs:
+                # folder name inside the ZIP = last path component
+                arc_root = src_dir.name
+                for file_path in sorted(src_dir.rglob("*")):
+                    if file_path.is_file():
+                        arc_name = arc_root + "/" + str(file_path.relative_to(src_dir))
+                        zf.write(file_path, arcname=arc_name)
+        buf.seek(0)
+        while chunk := buf.read(65536):
+            yield chunk
+
+    filename = f"augmented_{slug}.zip"
+    return StreamingResponse(
+        zip_generator(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 @app.get("/api/dataset/status/{job_id}", response_model=JobStatus, tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def get_job_status(job_id: UUID) -> JobStatus:

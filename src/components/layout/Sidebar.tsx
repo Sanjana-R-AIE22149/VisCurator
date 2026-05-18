@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Database,
+  Layers,
   Workflow,
   BarChart3,
   BookOpen,
@@ -21,12 +22,13 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { to: '/',          icon: LayoutDashboard, label: 'Dashboard',    end: true },
-  { to: '/dataset',   icon: Database,        label: 'Datasets',     end: false },
-  { to: '/builder',   icon: Workflow,         label: 'Builder',      end: false },
-  { to: '/analytics', icon: BarChart3,        label: 'Analytics',    end: false },
-  { to: '/library',   icon: BookOpen,         label: 'Library',      end: false },
-  { to: '/settings',  icon: Settings,         label: 'Settings',     end: false },
+  { to: '/',           icon: LayoutDashboard, label: 'Dashboard',  end: true },
+  { to: '/dataset',    icon: Database,        label: 'Datasets',   end: false },
+  { to: '/annotator',  icon: Layers,          label: 'Annotator',  end: false },
+  { to: '/builder',    icon: Workflow,        label: 'Builder',    end: false },
+  { to: '/analytics',  icon: BarChart3,       label: 'Analytics',  end: false },
+  { to: '/library',    icon: BookOpen,        label: 'Library',    end: false },
+  { to: '/settings',   icon: Settings,        label: 'Settings',   end: false },
 ];
 
 export default function Sidebar({ expanded, onToggle }: SidebarProps) {

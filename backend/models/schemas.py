@@ -54,6 +54,18 @@ class DatasetAnnotateRequest(BaseModel):
     """Body for POST /api/dataset/annotate."""
 
     job_id: str = Field(..., description="The ID of the local upload job.")
+    min_confidence: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description="CLIP cosine similarity threshold below which images go to low_confidence/ instead of train/.",
+    )
+    blur_threshold: float = Field(
+        default=80.0,
+        ge=1.0,
+        le=500.0,
+        description="Laplacian variance threshold for blur rejection. Lower = stricter (rejects more).",
+    )
 
 
 class DatasetSearchRequest(BaseModel):
