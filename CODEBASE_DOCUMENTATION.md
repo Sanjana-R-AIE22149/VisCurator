@@ -72,6 +72,16 @@ A registry of functions exposed to the agent.
 - **`analyze_dataset_and_plan_processing(...)`**: Deterministic rule-based logic to create a preprocessing plan.
 - **`clean_and_augment_dataset(...)`**: Generates and executes a Python script to perform actual image processing (resize, filter, augment).
 
+### `backend/agent/annotator.py`
+Heavyweight subprocess for autonomous auto-annotation of raw image uploads.
+- Utilizes **SAM** (facebook/sam-vit-base) for foreground segmentation and **CLIP** (openai/clip-vit-base-patch32) for zero-shot classification based on few-shot seed images.
+- Filters out blurry images and exact duplicates before annotation.
+
+### `backend/agent/augmenter.py`
+Isolated subprocess for recovering and expanding rejected/blurry images.
+- Applies a 3-pass anti-blur pipeline (Gaussian Unsharp Mask -> Richardson-Lucy Deconvolution -> CLAHE).
+- Generates N augmented variants (using `albumentations`) for each recovered image to compensate for dataset size reduction.
+
 ### `backend/builder/code_generator.py`
 The `PyTorchCodeGenerator` compiler.
 
@@ -138,3 +148,26 @@ The `NIMClient` (in `backend/agent/nim_client.py`) uses an async `httpx` client 
 - **Frontend**: `npm run dev` (Vite on port 5173).
 - **Backend**: `python -m backend.main` (FastAPI on port 8000).
 - **Environment**: Requires `.env` with `NVIDIA_API_KEY`, and optionally `HF_TOKEN`, `KAGGLE_USERNAME`, `KAGGLE_KEY`.
+
+---
+
+## 9. Testing & Quality Assurance
+
+VisCurator relies on integration testing and observable pipeline outputs rather than a dedicated unit test suite.
+
+### Integration & Health Checks
+- **`GET /api/health`**: Validates availability of all required Python packages (e.g., `torch`, `transformers`, `albumentations`) and environment variables.
+- **`GET /api/dataset/test-run`**: Programmatically sanity-checks the pipeline with a minimal dataset (e.g., `ylecun/mnist`) bypassing the agentic reasoning loop.
+- **`run_demo.py`**: A root-level script available to simulate a full end-to-end dataset curation pipeline run.
+
+### Quantitative Quality Metrics
+- **Dataset Level**: The system self-evaluates via the `estimate_dataset_quality` tool, measuring blur ratio, duplicate percentage, class balance (Gini coefficient), and average resolution.
+- **Augmentation Level**: Calculates Laplacian variance delta before and after the anti-blur recovery pipeline (`avg_blur_before` vs `avg_blur_after`).
+- **Model Training**: Evaluates training quality via SQLite-backed per-epoch metrics: loss, accuracy, precision, recall, and Mean Average Precision (mAP).
+
+### Comparative Experiment Design (A/B Testing)
+The most rigorous validation mechanism is the **Compare Mode** in the Builder:
+- Trains the exact same model architecture and hyperparameters on two datasets simultaneously.
+- **Run A**: Curated/Annotated dataset.
+- **Run B**: Raw/Unprocessed dataset.
+- Surfaces side-by-side loss curves and accuracy/mAP deltas. A statistical improvement signal is displayed if the accuracy delta exceeds a threshold (e.g., 2%).
