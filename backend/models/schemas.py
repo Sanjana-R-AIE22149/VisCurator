@@ -176,6 +176,62 @@ class TrainingMetricPoint(BaseModel):
     timestamp: str
 
 
+# ── Augmentation Agent ───────────────────────────────────────
+
+class AugmentationStrategy(str, Enum):
+    """Available augmentation intensity profiles."""
+    LIGHT       = "light"
+    MEDIUM      = "medium"
+    HEAVY       = "heavy"
+    MEDICAL     = "medical"
+    ADVERSARIAL = "adversarial"
+
+
+class AugmentationAgentRequest(BaseModel):
+    """Body for POST /api/dataset/augment-agent."""
+
+    job_id: str = Field(
+        ...,
+        description="UUID of an existing upload job whose dataset will be augmented.",
+    )
+    strategy: AugmentationStrategy = Field(
+        default=AugmentationStrategy.MEDIUM,
+        description="Augmentation intensity / profile.",
+    )
+    multiplier: float = Field(
+        default=3.0,
+        ge=1.1,
+        le=20.0,
+        description="Target dataset size = original × multiplier (ignored if target_size > 0).",
+    )
+    target_size: int = Field(
+        default=0,
+        ge=0,
+        description="Exact target images per class. Overrides multiplier when > 0.",
+    )
+    target_px: int = Field(
+        default=224,
+        ge=32,
+        le=1024,
+        description="All output images will be resized to target_px × target_px.",
+    )
+    balance: bool = Field(
+        default=True,
+        description="If True, minority classes receive extra augmentations to match the majority.",
+    )
+    max_workers: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description="Number of parallel worker threads.",
+    )
+    # Optional: directly supply a filesystem path instead of deriving from job_id
+    input_dir: str | None = Field(
+        default=None,
+        description="Absolute path to ImageFolder root. If set, overrides job_id-based path.",
+    )
+
+
 # ── Job Status ───────────────────────────────────────────────
 
 class JobStatus(BaseModel):

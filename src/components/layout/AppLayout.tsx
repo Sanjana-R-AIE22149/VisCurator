@@ -6,8 +6,10 @@ import { useAppStore } from '../../store/useAppStore';
 import ToastContainer from '../ui/Toast';
 import SetupModal from '../onboarding/SetupModal';
 import ShortcutHint from '../ui/ShortcutHint';
+import PipelineWizard from '../ui/PipelineWizard';
 
 export default function AppLayout() {
+
   const { sidebarOpen, setSidebarOpen } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -57,6 +59,9 @@ export default function AppLayout() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Status Bar */}
         <StatusBar />
+
+        {/* Pipeline Step Wizard — visible whenever a job is active */}
+        <PipelineWizard />
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto relative" id="main-content">

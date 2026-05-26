@@ -1,4 +1,4 @@
-import { BarChart3, CopyCheck, Database, FileText, FolderDown, ScanSearch, ShieldCheck, Sparkles, Wand2, Download, RefreshCw } from 'lucide-react';
+import { BarChart3, CopyCheck, Database, FileText, FolderDown, ScanSearch, ShieldCheck, Sparkles, Wand2, Download, RefreshCw, ArrowRight, Layers } from 'lucide-react';
 import DatasetControls from '../components/dataset/DatasetControls';
 import DatasetBrowser from '../components/dataset/DatasetBrowser';
 import LiveTerminal from '../components/dataset/LiveTerminal';
@@ -7,11 +7,13 @@ import StagePreview from '../components/dataset/StagePreview';
 import PreprocessingReportModal from '../components/dataset/PreprocessingReportModal';
 import { useAppStore } from '../store/useAppStore';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BASE_URL, authHeaders } from '../lib/api';
 
 import AnnotationSeedUI from '../components/dataset/AnnotationSeedUI';
 
 export default function DatasetPage() {
+  const navigate = useNavigate();
   const {
     imagesIngested,
     qualityScore,
@@ -40,6 +42,7 @@ export default function DatasetPage() {
 
   // Auto-refresh when pipeline finishes
   useEffect(() => {
+    document.title = 'Datasets — VisCurator';
     const handler = () => { void fetchProcessed(); };
     window.addEventListener('viscurator:pipeline-done', handler);
     return () => window.removeEventListener('viscurator:pipeline-done', handler);
@@ -116,6 +119,28 @@ export default function DatasetPage() {
             Describe your task — CVAgent searches HuggingFace, Kaggle, Roboflow & more, recommends preprocessing, and exports a processed dataset.
           </p>
         </div>
+
+        {/* ── Next Step CTA (after fetch completes) ── */}
+        {preprocessingReport && jobId && (
+          <div className="flex items-center gap-4 rounded-xl border border-violet-500/30 bg-gradient-to-r from-violet-500/10 to-violet-500/5 px-5 py-4">
+            <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center shrink-0">
+              <Layers className="w-4 h-4 text-violet-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-violet-300">Step 1 complete — dataset fetched & cleaned</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {imagesIngested ? `${imagesIngested.toLocaleString()} images ready.` : 'Dataset ready.'} Continue to define classes and auto-annotate with SAM+CLIP.
+              </p>
+            </div>
+            <button
+              id="cta-go-annotate"
+              onClick={() => navigate('/annotator')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-all shadow-lg shadow-violet-500/20 shrink-0"
+            >
+              Annotate <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {stats.map(({ label, value, icon: Icon, accent }) => (

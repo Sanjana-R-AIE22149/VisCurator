@@ -162,6 +162,7 @@ export default function BuilderPage() {
   const { clonedRecipe, setClonedRecipe } = useAppStore();
 
   useEffect(() => {
+    document.title = 'Builder — VisCurator';
     if (clonedRecipe) {
       const t = setTimeout(() => setClonedRecipe(null), 4000);
       return () => clearTimeout(t);

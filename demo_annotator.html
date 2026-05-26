@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisCurator · Auto Annotator Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --surface2: #1a1a25;
+      --border: rgba(255,255,255,0.08);
+      --accent: #7c6fff;
+      --accent2: #4fc3f7;
+      --accent3: #69f0ae;
+      --danger: #ff5370;
+      --text: #e8e8f0;
+      --muted: #666680;
+      --card-glow: rgba(124,111,255,0.12);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background mesh ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 10% 0%, rgba(124,111,255,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(79,195,247,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 24px 60px; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 24px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 36px;
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800; color: #fff;
+      box-shadow: 0 0 20px rgba(124,111,255,0.4);
+    }
+    .logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo-text span { color: var(--accent); }
+    .badge {
+      background: linear-gradient(135deg, rgba(124,111,255,0.2), rgba(79,195,247,0.2));
+      border: 1px solid rgba(124,111,255,0.3);
+      color: var(--accent);
+      padding: 6px 14px; border-radius: 100px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: rgba(124,111,255,0.25); }
+    .card-title {
+      font-size: 13px; font-weight: 600; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px; height: 14px;
+      border-radius: 2px;
+      background: linear-gradient(var(--accent), var(--accent2));
+    }
+
+    /* ── Layout ── */
+    .setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+    /* ── Drop zone ── */
+    #dropzone {
+      border: 2px dashed rgba(124,111,255,0.35);
+      border-radius: 14px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: rgba(124,111,255,0.03);
+      position: relative;
+    }
+    #dropzone:hover, #dropzone.drag-over {
+      border-color: var(--accent);
+      background: rgba(124,111,255,0.08);
+      box-shadow: 0 0 30px rgba(124,111,255,0.15);
+    }
+    #dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .drop-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.7; }
+    .drop-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .drop-sub { font-size: 13px; color: var(--muted); }
+    .file-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
+    .file-chip {
+      background: rgba(124,111,255,0.15); border: 1px solid rgba(124,111,255,0.3);
+      border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--accent);
+    }
+
+    /* ── Classes input ── */
+    #class-input-area {
+      display: flex; flex-direction: column; gap: 12px; height: 100%;
+    }
+    .class-input-row { display: flex; gap: 8px; }
+    .class-input-row input {
+      flex: 1;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+      color: var(--text); font-family: inherit; font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .class-input-row input:focus { outline: none; border-color: var(--accent); }
+    .class-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .class-tag {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      border: 1px solid;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .class-tag:hover { opacity: 0.8; }
+    .class-tag .remove { opacity: 0.5; font-size: 14px; }
+    .class-tag .remove:hover { opacity: 1; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 20px; border-radius: 9px; border: none;
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; display: inline-flex;
+      align-items: center; gap: 8px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #5e4fff);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(124,111,255,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 26px rgba(124,111,255,0.5); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm { padding: 7px 14px; font-size: 12px; border-radius: 7px; }
+    .btn-success {
+      background: linear-gradient(135deg, #00c853, #1de9b6);
+      color: #000; font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0,200,83,0.35);
+    }
+    .btn-danger { background: rgba(255,83,112,0.15); border: 1px solid rgba(255,83,112,0.3); color: var(--danger); }
+
+    /* ── Action bar ── */
+    .action-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    .action-bar-left { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; font-size: 13px; color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+    .status-dot.loading { background: var(--accent2); animation: pulse 1s infinite; }
+    .status-dot.done { background: var(--accent3); }
+    .status-dot.error { background: var(--danger); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    #progress-bar-wrap {
+      height: 3px; background: var(--surface2); border-radius: 2px;
+      overflow: hidden; margin-top: 8px;
+    }
+    #progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s; }
+
+    /* ── Image grid ── */
+    #results-section { display: none; }
+    .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+
+    .img-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      transition: all 0.25s;
+    }
+    .img-card:hover { border-color: rgba(124,111,255,0.35); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .img-card.confirmed { border-color: rgba(105,240,174,0.4); }
+
+    .img-canvas-wrap {
+      position: relative;
+      width: 100%; aspect-ratio: 4/3;
+      background: #0a0a0f; overflow: hidden;
+      cursor: crosshair;
+    }
+    .img-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .img-card-body { padding: 16px; }
+    .img-card-name { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between; }
+    .detection-count { background: rgba(124,111,255,0.15); color: var(--accent); padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+
+    /* ── Detection list inside each card ── */
+    .detections-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+    .detections-list::-webkit-scrollbar { width: 4px; }
+    .detections-list::-webkit-scrollbar-track { background: var(--surface2); }
+    .detections-list::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
+
+    .detection-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px;
+      background: var(--surface2); border: 1px solid transparent;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .detection-row:hover { border-color: rgba(124,111,255,0.3); }
+    .detection-row.active { border-color: var(--accent); background: rgba(124,111,255,0.1); }
+    .det-color { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .det-info { flex: 1; min-width: 0; }
+    .det-class { font-size: 13px; font-weight: 600; }
+    .det-conf { font-size: 11px; color: var(--muted); }
+    .det-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    /* ── Class confirm dropdown ── */
+    .class-select {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); font-family: inherit; font-size: 12px;
+      border-radius: 6px; padding: 4px 8px; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .class-select:focus { outline: none; border-color: var(--accent); }
+    .confirm-icon { color: var(--accent3); font-size: 14px; }
+
+    /* ── Export section ── */
+    #export-section { display: none; margin-top: 24px; }
+    .export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .export-file {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; text-align: center;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .export-file:hover { border-color: var(--accent3); box-shadow: 0 4px 16px rgba(105,240,174,0.1); }
+    .export-file-icon { font-size: 24px; margin-bottom: 8px; }
+    .export-file-name { font-size: 12px; font-weight: 600; color: var(--accent3); word-break: break-all; }
+    .export-file-size { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Model loading overlay ── */
+    #model-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(10,10,15,0.92); backdrop-filter: blur(12px);
+      align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+    }
+    #model-overlay.visible { display: flex; }
+    .model-spinner {
+      width: 60px; height: 60px; border-radius: 50%;
+      border: 3px solid var(--surface2);
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .model-overlay-text { font-size: 16px; font-weight: 600; color: var(--accent); }
+    .model-overlay-sub { font-size: 13px; color: var(--muted); }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 60px 24px; color: var(--muted); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-state-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 4px; }
+
+    /* Color palette for classes */
+    .palette { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="model-overlay">
+  <div class="model-spinner"></div>
+  <div class="model-overlay-text">⚡ Loading Object Detection Model</div>
+  <div class="model-overlay-sub">Downloading DETR (ResNet-50) via Transformers.js — first run only</div>
+  <div id="progress-bar-wrap" style="width:320px"><div id="progress-bar"></div></div>
+  <div id="overlay-progress-text" style="font-size:12px;color:var(--muted);"></div>
+</div>
+
+<div class="wrapper">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">VC</div>
+      <div class="logo-text">Vis<span>Curator</span></div>
+    </div>
+    <div class="badge">🤖 Auto Annotator · Demo</div>
+  </header>
+
+  <!-- Setup Row -->
+  <div class="setup-row">
+    <!-- Drop zone -->
+    <div class="card">
+      <div class="card-title">📂 Upload Images</div>
+      <div id="dropzone">
+        <input type="file" id="file-input" accept="image/*" multiple />
+        <div class="drop-icon">🖼️</div>
+        <div class="drop-title">Drop images here</div>
+        <div class="drop-sub">or click to browse · JPG, PNG, WEBP</div>
+        <div class="file-chips" id="file-chips"></div>
+      </div>
+    </div>
+
+    <!-- Class names -->
+    <div class="card">
+      <div class="card-title">🏷️ Define Target Classes</div>
+      <div id="class-input-area">
+        <div style="font-size:13px;color:var(--muted);line-height:1.5;">
+          Enter the class names relevant to your dataset. The AI will map its detections to your classes.
+          Leave empty to use COCO default labels.
+        </div>
+        <div class="class-input-row">
+          <input type="text" id="class-input" placeholder="e.g. pizza, burger, soda..." />
+          <button class="btn btn-ghost btn-sm" onclick="addClass()">Add</button>
+        </div>
+        <div class="class-tags" id="class-tags">
+          <div style="font-size:12px;color:var(--muted);padding:4px 0;">No custom classes — using model defaults</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <div class="action-bar-left">
+      <button class="btn btn-primary" id="run-btn" onclick="runDetection()">
+        <span>🔍</span> Auto-Detect & Annotate
+      </button>
+      <button class="btn btn-ghost" onclick="resetAll()">↺ Reset</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted)">
+      🧠 Powered by DETR + Transformers.js · runs locally in your browser
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar" id="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Upload images and click Annotate to begin.</span>
+  </div>
+
+  <!-- Results -->
+  <div id="results-section">
+    <div class="card-title" style="margin-bottom:16px">📌 Detected & Annotated Images</div>
+    <div class="img-grid" id="img-grid"></div>
+  </div>
+
+  <!-- Export -->
+  <div id="export-section">
+    <div class="card" style="margin-top:24px">
+      <div class="card-title">📦 Export YOLO Annotations</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+        All confirmed annotations are ready for export as YOLO-format label files + <code style="color:var(--accent)">data.yaml</code>.
+      </div>
+      <button class="btn btn-success" id="export-btn" onclick="exportYOLO()">
+        ⬇️ Download YOLO Dataset
+      </button>
+      <div class="export-grid" id="export-preview" style="margin-top:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ── Transformers.js ───────────────────────────────────────────────────────────
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+env.allowLocalModels = false;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const COLORS = [
+  '#7c6fff','#4fc3f7','#69f0ae','#ffd740','#ff6e40',
+  '#f06292','#81c784','#64b5f6','#ffb74d','#ba68c8',
+  '#4db6ac','#ff8a65','#a1887f','#90a4ae','#dce775'
+];
+
+let detector = null;
+let loadingModel = false;
+let imageFiles = [];
+let customClasses = [];
+let imageResults = []; // [{file, dataUrl, detections:[{label,score,box,confirmedClass,color}]}]
+let activeDetection = null; // {imgIdx, detIdx}
+
+// ── Model Loading ─────────────────────────────────────────────────────────────
+async function loadModel() {
+  if (detector) return detector;
+  if (loadingModel) return null;
+  loadingModel = true;
+  document.getElementById('model-overlay').classList.add('visible');
+  setStatus('loading', 'Loading detection model (first-time download, ~50MB)...');
+  try {
+    detector = await pipeline('object-detection', 'Xenova/detr-resnet-50', {
+      quantized: true,
+      progress_callback: (p) => {
+        if (p.status === 'progress') {
+          const pct = Math.round(p.progress || 0);
+          document.getElementById('progress-bar').style.width = pct + '%';
+          document.getElementById('overlay-progress-text').textContent =
+            `${p.file || ''} · ${pct}%`;
+        }
+      }
+    });
+    document.getElementById('model-overlay').classList.remove('visible');
+    setStatus('done', 'Model ready! Running detection...');
+    return detector;
+  } catch(e) {
+    document.getElementById('model-overlay').classList.remove('visible');
+    setStatus('error', 'Failed to load model: ' + e.message);
+    loadingModel = false;
+    return null;
+  }
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot' + (state === 'idle' ? '' : ' ' + state);
+  document.getElementById('status-text').textContent = msg;
+}
+
+// ── Classes ───────────────────────────────────────────────────────────────────
+window.addClass = function() {
+  const inp = document.getElementById('class-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  const names = val.split(',').map(s => s.trim()).filter(Boolean);
+  names.forEach(n => { if (!customClasses.includes(n)) customClasses.push(n); });
+  inp.value = '';
+  renderClassTags();
+};
+
+document.getElementById('class-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.addClass();
+});
+
+function renderClassTags() {
+  const container = document.getElementById('class-tags');
+  if (customClasses.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">No custom classes — using model defaults</div>';
+    return;
+  }
+  container.innerHTML = customClasses.map((c, i) => {
+    const color = COLORS[i % COLORS.length];
+    return `<div class="class-tag" style="color:${color};border-color:${color}30;background:${color}15">
+      ${c}
+      <span class="remove" onclick="removeClass(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+window.removeClass = function(idx) {
+  customClasses.splice(idx, 1);
+  renderClassTags();
+};
+
+// ── File Input ────────────────────────────────────────────────────────────────
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  handleFiles([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
+
+function handleFiles(files) {
+  const imgs = files.filter(f => f.type.startsWith('image/'));
+  imageFiles = [...imageFiles, ...imgs];
+  renderFileChips();
+}
+
+function renderFileChips() {
+  document.getElementById('file-chips').innerHTML =
+    imageFiles.map(f => `<div class="file-chip">${f.name}</div>`).join('');
+}
+
+// ── Detection ─────────────────────────────────────────────────────────────────
+window.runDetection = async function() {
+  if (imageFiles.length === 0) {
+    setStatus('error', 'Please upload at least one image.');
+    return;
+  }
+  const det = await loadModel();
+  if (!det) return;
+
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('results-section').style.display = 'block';
+  document.getElementById('img-grid').innerHTML = '';
+  imageResults = [];
+
+  setStatus('loading', `Detecting objects in ${imageFiles.length} image(s)...`);
+
+  for (let i = 0; i < imageFiles.length; i++) {
+    const file = imageFiles[i];
+    setStatus('loading', `Analysing ${file.name} (${i + 1}/${imageFiles.length})...`);
+
+    const dataUrl = await fileToDataUrl(file);
+
+    let rawDets = [];
+    try {
+      rawDets = await detector(dataUrl, { threshold: 0.4 });
+    } catch(e) {
+      rawDets = [];
+    }
+
+    // Map labels to custom classes if provided
+    const detections = rawDets.map((d, idx) => {
+      const confirmedClass = mapToCustomClass(d.label);
+      return {
+        label: d.label,
+        score: d.score,
+        box: d.box, // {xmin,ymin,xmax,ymax}
+        confirmedClass: confirmedClass,
+        confirmed: false,
+        color: COLORS[idx % COLORS.length]
+      };
+    });
+
+    imageResults.push({ file, dataUrl, detections });
+    renderImageCard(i, dataUrl, file.name, detections);
+  }
+
+  setStatus('done', `Done! ${imageResults.length} images annotated. Review detections below.`);
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('export-section').style.display = 'block';
+};
+
+function mapToCustomClass(modelLabel) {
+  if (customClasses.length === 0) return modelLabel;
+  // Try to find a match (case-insensitive, substring)
+  const lbl = modelLabel.toLowerCase();
+  const match = customClasses.find(c =>
+    lbl.includes(c.toLowerCase()) || c.toLowerCase().includes(lbl)
+  );
+  return match || customClasses[0]; // fallback to first class
+}
+
+// ── Render Card ───────────────────────────────────────────────────────────────
+function renderImageCard(imgIdx, dataUrl, name, detections) {
+  const grid = document.getElementById('img-grid');
+  const card = document.createElement('div');
+  card.className = 'img-card';
+  card.id = `img-card-${imgIdx}`;
+
+  const classOptions = (customClasses.length > 0 ? customClasses : getUniqueDetectionLabels())
+    .map(c => `<option value="${c}">${c}</option>`).join('');
+
+  const detRows = detections.length === 0
+    ? `<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;">No objects detected</div>`
+    : detections.map((d, di) => {
+      const opts = (customClasses.length > 0 ? customClasses : getUniqueLabels())
+        .map(c => `<option value="${c}" ${c === d.confirmedClass ? 'selected' : ''}>${c}</option>`)
+        .join('');
+      const allOpts = customClasses.length === 0
+        ? `<option value="${d.label}" selected>${d.label}</option>`
+        : opts;
+      return `
+        <div class="detection-row" id="det-row-${imgIdx}-${di}" onclick="highlightDet(${imgIdx},${di})">
+          <div class="det-color" style="background:${d.color}"></div>
+          <div class="det-info">
+            <div class="det-class">${d.confirmedClass}</div>
+            <div class="det-conf">${d.label} · ${(d.score*100).toFixed(0)}% confidence</div>
+          </div>
+          <div class="det-actions">
+            <select class="class-select" onchange="updateClass(${imgIdx},${di},this.value)" onclick="event.stopPropagation()">
+              ${allOpts}
+            </select>
+            <span class="confirm-icon" id="conf-icon-${imgIdx}-${di}" title="Confirmed">✓</span>
+          </div>
+        </div>`;
+    }).join('');
+
+  card.innerHTML = `
+    <div class="img-canvas-wrap">
+      <canvas id="canvas-${imgIdx}"></canvas>
+    </div>
+    <div class="img-card-body">
+      <div class="img-card-name">
+        <span>${name}</span>
+        <span class="detection-count">${detections.length} object${detections.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="detections-list">${detRows}</div>
+    </div>`;
+
+  grid.appendChild(card);
+
+  // Draw canvas
+  const canvas = document.getElementById(`canvas-${imgIdx}`);
+  drawImageWithBoxes(canvas, dataUrl, detections, -1);
+}
+
+function getUniqueLabels() {
+  const labels = new Set();
+  imageResults.forEach(r => r.detections.forEach(d => labels.add(d.label)));
+  return [...labels];
+}
+function getUniqueDetectionLabels() { return getUniqueLabels(); }
+
+// ── Canvas Drawing ────────────────────────────────────────────────────────────
+function drawImageWithBoxes(canvas, dataUrl, detections, highlightIdx) {
+  const img = new Image();
+  img.onload = () => {
+    const wrap = canvas.parentElement;
+    const W = wrap.clientWidth || 340;
+    const H = wrap.clientHeight || 255;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Fit image maintaining aspect ratio
+    const scale = Math.min(W / img.width, H / img.height);
+    const sw = img.width * scale, sh = img.height * scale;
+    const ox = (W - sw) / 2, oy = (H - sh) / 2;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(img, ox, oy, sw, sh);
+
+    detections.forEach((d, i) => {
+      const { xmin, ymin, xmax, ymax } = d.box;
+      const bx = ox + xmin * scale;
+      const by = oy + ymin * scale;
+      const bw = (xmax - xmin) * scale;
+      const bh = (ymax - ymin) * scale;
+
+      const isHL = (i === highlightIdx);
+      ctx.strokeStyle = d.color;
+      ctx.lineWidth = isHL ? 3 : 2;
+      ctx.setLineDash(isHL ? [] : []);
+
+      // Glow on highlight
+      if (isHL) {
+        ctx.shadowColor = d.color;
+        ctx.shadowBlur = 12;
+      }
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.shadowBlur = 0;
+
+      // Background for label
+      const label = d.confirmedClass;
+      ctx.font = `${isHL ? 700 : 600} 12px Inter, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = d.color;
+      ctx.globalAlpha = isHL ? 0.95 : 0.85;
+      ctx.fillRect(bx - 1, by - 22, tw + 14, 20);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#000';
+      ctx.fillText(label, bx + 6, by - 7);
+    });
+  };
+  img.src = dataUrl;
+}
+
+window.highlightDet = function(imgIdx, detIdx) {
+  const { dataUrl, detections } = imageResults[imgIdx];
+  const canvas = document.getElementById(`canvas-${imgIdx}`);
+  drawImageWithBoxes(canvas, dataUrl, detections, detIdx);
+
+  // Style rows
+  detections.forEach((_, di) => {
+    const row = document.getElementById(`det-row-${imgIdx}-${di}`);
+    if (row) row.className = `detection-row${di === detIdx ? ' active' : ''}`;
+  });
+};
+
+window.updateClass = function(imgIdx, detIdx, newClass) {
+  imageResults[imgIdx].detections[detIdx].confirmedClass = newClass;
+  imageResults[imgIdx].detections[detIdx].confirmed = true;
+  const icon = document.getElementById(`conf-icon-${imgIdx}-${detIdx}`);
+  if (icon) { icon.textContent = '✅'; }
+  // Redraw
+  const { dataUrl, detections } = imageResults[imgIdx];
+  const canvas = document.getElementById(`canvas-${imgIdx}`);
+  drawImageWithBoxes(canvas, dataUrl, detections, detIdx);
+};
+
+// ── Export YOLO ───────────────────────────────────────────────────────────────
+window.exportYOLO = async function() {
+  // Collect all class names
+  const allClasses = new Set();
+  imageResults.forEach(r => r.detections.forEach(d => allClasses.add(d.confirmedClass)));
+  const classList = [...allClasses];
+
+  const files = [];
+
+  // data.yaml
+  const yaml = `path: ./dataset\ntrain: images/train\nval: images/val\nnc: ${classList.length}\nnames: [${classList.map(c => `'${c}'`).join(', ')}]\n`;
+  files.push({ name: 'data.yaml', content: yaml });
+
+  // Per-image label .txt files
+  for (let r of imageResults) {
+    const img = new Image();
+    await new Promise(res => { img.onload = res; img.src = r.dataUrl; });
+    const W = img.naturalWidth, H = img.naturalHeight;
+
+    const lines = r.detections.map(d => {
+      const { xmin, ymin, xmax, ymax } = d.box;
+      const classId = classList.indexOf(d.confirmedClass);
+      const cx = ((xmin + xmax) / 2) / W;
+      const cy = ((ymin + ymax) / 2) / H;
+      const nw = (xmax - xmin) / W;
+      const nh = (ymax - ymin) / H;
+      return `${classId} ${cx.toFixed(6)} ${cy.toFixed(6)} ${nw.toFixed(6)} ${nh.toFixed(6)}`;
+    });
+
+    const stem = r.file.name.replace(/\.[^.]+$/, '');
+    files.push({ name: `labels/${stem}.txt`, content: lines.join('\n') + '\n' });
+  }
+
+  // readme
+  files.push({
+    name: 'README.txt',
+    content: `VisCurator Auto-Annotator Export\n================================\nClasses (${classList.length}): ${classList.join(', ')}\nImages: ${imageResults.length}\nFormat: YOLO (normalized cx cy w h)\n\nUsage:\n  yolo train data=data.yaml model=yolov8n.pt epochs=100\n`
+  });
+
+  // Build a zip using JSZip CDN
+  const JSZip = await loadJSZip();
+  const zip = new JSZip();
+  files.forEach(f => zip.file(f.name, f.content));
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'viscurator_annotations.zip'; a.click();
+  URL.revokeObjectURL(url);
+
+  // Show preview
+  const preview = document.getElementById('export-preview');
+  preview.innerHTML = files.map(f => `
+    <div class="export-file">
+      <div class="export-file-icon">${f.name.endsWith('.yaml') ? '⚙️' : f.name.endsWith('.txt') && f.name.includes('labels') ? '📝' : '📄'}</div>
+      <div class="export-file-name">${f.name}</div>
+      <div class="export-file-size">${f.content.length} bytes</div>
+    </div>`).join('');
+
+  setStatus('done', `✅ YOLO dataset exported — ${files.length} files in viscurator_annotations.zip`);
+};
+
+async function loadJSZip() {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = () => res(window.JSZip);
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function fileToDataUrl(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+window.resetAll = function() {
+  imageFiles = []; imageResults = []; customClasses = [];
+  document.getElementById('file-chips').innerHTML = '';
+  document.getElementById('img-grid').innerHTML = '';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('export-section').style.display = 'none';
+  document.getElementById('export-preview').innerHTML = '';
+  renderClassTags();
+  setStatus('idle', 'Upload images and click Annotate to begin.');
+  document.getElementById('run-btn').disabled = false;
+};
+</script>
+</body>
+</html>

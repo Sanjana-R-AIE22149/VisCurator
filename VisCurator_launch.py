@@ -104,6 +104,7 @@ REQUIRED_PACKAGES = [
     ("jose",           "python-jose[cryptography]>=3.3.0"),
     ("passlib",        "passlib[bcrypt]>=1.7.4"),
     ("datasets",       "datasets>=2.19.0"),
+    ("multipart",      "python-multipart>=0.0.9"),
 ]
 
 
@@ -380,7 +381,7 @@ def start_frontend() -> subprocess.Popen:
     )
 
     _info(f"Waiting for Vite dev server (PID {proc.pid})…")
-    if not _wait_http(FRONTEND_URL, timeout=30, proc=proc):
+    if not _wait_http(FRONTEND_URL, timeout=120, proc=proc):
         if proc.poll() is not None:
             _fail(
                 "Frontend process died during startup.\n"

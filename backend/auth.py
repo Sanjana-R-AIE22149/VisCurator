@@ -12,6 +12,19 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
+import bcrypt
+# Monkeypatch bcrypt to prevent passlib from crashing on modern bcrypt versions
+_orig_hashpw = bcrypt.hashpw
+def _patched_hashpw(password, salt):
+    if isinstance(password, str):
+        password_bytes = password.encode("utf-8")
+    else:
+        password_bytes = password
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+    return _orig_hashpw(password_bytes, salt)
+bcrypt.hashpw = _patched_hashpw
+
 from passlib.context import CryptContext
 from pydantic import BaseModel
 

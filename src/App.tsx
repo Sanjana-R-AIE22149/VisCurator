@@ -9,6 +9,8 @@ import BuilderPage from './pages/BuilderPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import LibraryPage from './pages/LibraryPage';
 import AnnotatorPage from './pages/AnnotatorPage';
+import QuickAnnotatorPage from './pages/QuickAnnotatorPage';
+import AugmentationPage from './pages/AugmentationPage';
 import BootScreen from './components/ui/BootScreen';
 
 /* ── Settings placeholder (stub) ── */
@@ -48,6 +50,8 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="dataset" element={<DatasetPage />} />
             <Route path="annotator" element={<AnnotatorPage />} />
+            <Route path="quick-annotator" element={<QuickAnnotatorPage />} />
+            <Route path="augmentation" element={<AugmentationPage />} />
             <Route path="builder" element={<BuilderPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="library" element={<LibraryPage />} />

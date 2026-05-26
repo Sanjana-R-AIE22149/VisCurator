@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { useAppStore, type Toast as ToastType } from '../../store/useAppStore';
+import { SOUND_MAP } from '../../lib/sounds';
 
 const TOAST_ICONS = {
   success: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
@@ -21,6 +22,9 @@ function ToastItem({ toast }: { toast: ToastType }) {
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
+    // Play notification sound immediately when toast appears
+    SOUND_MAP[toast.type]?.();
+
     const duration = 4000;
     const step = 100;
     const interval = setInterval(() => {

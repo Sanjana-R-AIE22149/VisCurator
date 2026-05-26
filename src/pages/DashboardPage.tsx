@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   Database,
@@ -6,6 +7,7 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowRight,
   Clock,
   CheckCircle2,
   AlertTriangle,
@@ -14,6 +16,8 @@ import {
   HardDrive,
   MemoryStick,
   Server,
+  Layers,
+  Wand2,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { fetchHealth, BASE_URL } from '../lib/api';
@@ -86,13 +90,29 @@ function SkeletonBar() {
   return <div className="h-3 rounded bg-slate-800 skeleton-shimmer w-full" />;
 }
 
+// ── Time-aware greeting ───────────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 5)  return 'Good night';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  if (h < 21) return 'Good evening';
+  return 'Good night';
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const user           = useAppStore((s) => s.user);
   const imagesIngested = useAppStore((s) => s.imagesIngested);
   const qualityScore   = useAppStore((s) => s.qualityScore);
   const terminalLogs   = useAppStore((s) => s.terminalLogs);
+  const jobId             = useAppStore((s) => s.jobId);
+  const preprocessingReport = useAppStore((s) => s.preprocessingReport);
+  const trainingRunId     = useAppStore((s) => s.trainingRunId);
+  const isProcessing      = useAppStore((s) => s.isProcessing);
+  const isTraining        = useAppStore((s) => s.isTraining);
 
   const [visible, setVisible]           = useState(false);
   const [isLoading, setIsLoading]       = useState(true);
@@ -102,6 +122,7 @@ export default function DashboardPage() {
 
   // ── Initial fade-in ──
   useEffect(() => {
+    document.title = 'Dashboard — VisCurator';
     const t = setTimeout(() => { setIsLoading(false); setVisible(true); }, 600);
     return () => clearTimeout(t);
   }, []);
@@ -121,10 +142,11 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Telemetry polling every 3 s ──
+  // ── Telemetry polling every 3 s — pauses when tab is hidden ──
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
+      if (document.visibilityState === 'hidden') return;  // don't hammer while hidden
       try {
         const res = await fetch(`${BASE_URL}/api/system/telemetry`, {
           signal: AbortSignal.timeout(4000),
@@ -141,7 +163,8 @@ export default function DashboardPage() {
     };
     poll();
     const id = setInterval(poll, 3_000);
-    return () => { cancelled = true; clearInterval(id); };
+    document.addEventListener('visibilitychange', poll);
+    return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', poll); };
   }, []);
 
   // ── Metric cards ──
@@ -248,7 +271,7 @@ export default function DashboardPage() {
               Command Center
             </p>
             <h1 className="text-3xl font-bold text-slate-100 tracking-tight">
-              Good evening,{' '}
+              {getGreeting()},{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-sky-400">
                 {user?.name?.split(' ')[0] ?? 'Engineer'}
               </span>
@@ -297,6 +320,80 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Pipeline Quick-Actions (shown when a job is active) ── */}
+        {jobId && (
+          <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-md overflow-hidden">
+            <div className="flex items-center gap-2 px-6 py-3 border-b border-slate-800/60">
+              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              <span className="text-xs font-semibold text-slate-300">Active Pipeline</span>
+              <span className="ml-1 font-mono text-[10px] text-slate-600">{jobId.slice(0, 8)}…</span>
+            </div>
+            <div className="grid grid-cols-4 divide-x divide-slate-800/60">
+              {[
+                {
+                  step: 1, label: 'Fetch', icon: Database, path: '/dataset',
+                  done: !!preprocessingReport, active: isProcessing,
+                  desc: preprocessingReport
+                    ? `${imagesIngested?.toLocaleString() ?? '?'} images ingested`
+                    : 'Upload or search a dataset',
+                  color: 'teal',
+                },
+                {
+                  step: 2, label: 'Annotate', icon: Layers, path: '/annotator',
+                  done: false, active: false,
+                  desc: preprocessingReport ? 'Define classes & auto-annotate' : 'Complete Fetch first',
+                  color: 'violet',
+                },
+                {
+                  step: 3, label: 'Augment', icon: Wand2, path: '/augmentation',
+                  done: false, active: false,
+                  desc: 'Multiply dataset with class-aware transforms',
+                  color: 'sky',
+                },
+                {
+                  step: 4, label: 'Train', icon: Cpu, path: '/builder',
+                  done: !!trainingRunId && !isTraining, active: isTraining,
+                  desc: trainingRunId ? `Run ${trainingRunId.slice(0, 8)}` : 'Design & launch model',
+                  color: 'amber',
+                },
+              ].map(({ step, label, icon: Icon, path, done, active, desc, color }) => (
+                <button
+                  key={step}
+                  id={`dash-pipeline-step-${step}`}
+                  onClick={() => navigate(path)}
+                  className="flex flex-col items-center gap-2 px-4 py-5 hover:bg-slate-800/30 transition-colors group text-center"
+                >
+                  <div className={`
+                    w-10 h-10 rounded-xl flex items-center justify-center border transition-colors
+                    ${ done    ? `bg-teal-500/20 border-teal-500/40`
+                      : active ? `bg-${color}-500/20 border-${color}-500/50 shadow-lg shadow-${color}-500/20`
+                      :          `bg-slate-800/60 border-slate-700/50 group-hover:border-slate-600/60`
+                    }
+                  `}>
+                    {done ? (
+                      <CheckCircle2 className="w-5 h-5 text-teal-400" />
+                    ) : active ? (
+                      <Loader2 className={`w-5 h-5 text-${color}-400 animate-spin`} />
+                    ) : (
+                      <Icon className={`w-5 h-5 ${ done ? 'text-teal-400' : `text-slate-500 group-hover:text-${color}-400`} transition-colors`} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="text-[9px] font-mono text-slate-700">0{step}</span>
+                      <span className={`text-xs font-semibold ${ done ? 'text-teal-300' : active ? `text-${color}-300` : 'text-slate-400 group-hover:text-slate-200'} transition-colors`}>
+                        {label}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 mt-0.5 max-w-[100px]">{desc}</p>
+                  </div>
+                  <ArrowRight className="w-3 h-3 text-slate-700 group-hover:text-slate-500 transition-colors" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Infrastructure Telemetry ── */}
         <div className="rounded-2xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-md overflow-hidden">

@@ -243,6 +243,7 @@ export default function AnalyticsPage() {
   const [compareMode, setCompareMode] = useState(false);
 
   useEffect(() => {
+    document.title = 'Analytics — VisCurator';
     const timer = setTimeout(() => setVisible(true), 60);
     return () => clearTimeout(timer);
   }, []);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
-import { Bot, Zap, AlertTriangle, ChevronRight, X, Copy, Check, Download } from 'lucide-react';
+import { Bot, Zap, AlertTriangle, ChevronRight, X, Copy, Check, Download, BarChart2, ArrowRight } from 'lucide-react';
 import { streamCopilotAnalysis, compileGraph, type CompileResult } from '../../lib/copilot';
 import { connectTrainingWebSocket, getHealth, startTrainingRun, getLocalDatasets, inspectDataset, type PipelineMessage, type DatasetInfo } from '../../lib/api';
 
@@ -70,6 +71,7 @@ function highlightPython(code: string): React.ReactNode[] {
 }
 
 export default function CopilotPanel() {
+  const navigate = useNavigate();
   const {
     copilotResponse,
     setCopilotResponse,
@@ -510,6 +512,19 @@ export default function CopilotPanel() {
           <p className="pt-1 text-center font-mono text-[8px] tracking-wider text-slate-600">
             Powered by NVIDIA NIM
           </p>
+
+          {/* ── View Analytics CTA (after training run completes) ── */}
+          {trainingRunId && !isTraining && (
+            <button
+              id="cta-view-analytics"
+              onClick={() => navigate(`/analytics?runId=${trainingRunId}`)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-teal-600/20 to-emerald-600/20 border border-teal-500/30 text-teal-300 text-xs font-semibold transition-all hover:from-teal-600/30 hover:border-teal-500/50 shadow-lg shadow-teal-500/10"
+            >
+              <BarChart2 className="h-3.5 w-3.5" />
+              View Training Analytics
+              <ArrowRight className="h-3 w-3 ml-auto" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -11,7 +11,9 @@ import logging
 import os
 import site
 import sys
+import tempfile
 import zipfile
+from collections import deque
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -31,9 +33,10 @@ except ImportError:  # pragma: no cover - environment fallback
     def load_dotenv(*_args: Any, **_kwargs: Any) -> bool:
         return False
 from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, File, UploadFile
+from starlette.background import BackgroundTask
 from starlette.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.agent.dataset_agent import DatasetAgent
@@ -41,6 +44,7 @@ from backend.agent.nim_client import NIMClient
 from backend.agent.tools import search_datasets
 from backend.auth import get_current_user, router as auth_router
 from backend.models.schemas import (
+    AugmentationAgentRequest,
     BuilderCompileRequest,
     BuilderTrainRequest,
     BuilderTrainResponse,
@@ -71,7 +75,7 @@ logger = logging.getLogger("viscurator")
 # ── In-memory stores ─────────────────────────────────────────
 
 jobs: dict[UUID, dict[str, Any]] = {}
-job_logs: dict[UUID, list[PipelineMessage]] = {}
+job_logs: dict[UUID, deque] = {}   # deque(maxlen=500) per job — O(1) append/trim
 training_runs: dict[str, dict[str, Any]] = {}
 
 # Agent sessions persist between WS connections so conversations continue
@@ -95,19 +99,19 @@ async def lifespan(app: FastAPI):
     if api_key and api_key not in ("your_key_here", ""):
         try:
             nim_client = NIMClient(api_key=api_key)
-            print(f"✓ NIM Connected (API Key: {api_key[:8]}...)")
+            print(f"[OK] NIM Connected (API Key: {api_key[:8]}...)")
         except Exception as exc:
             logger.warning("NIM client init failed: %s", exc)
             nim_client = None
-            print(f"❌ NIM Connection Failed: {exc}")
+            print(f"[FAIL] NIM Connection Failed: {exc}")
     else:
         logger.warning("NVIDIA_API_KEY not set — agent features disabled.")
-        print("❌ NVIDIA_API_KEY MISSING")
+        print("[FAIL] NVIDIA_API_KEY MISSING")
 
     print(f"\nEvent Loop: {type(asyncio.get_event_loop()).__name__}")
     print("\nPackages:")
     for pkg in ["datasets", "torch", "albumentations", "imagehash", "cv2", "PIL", "aiohttp"]:
-        status = "✓" if _check_pkg(pkg) else "❌"
+        status = "[OK]" if _check_pkg(pkg) else "[FAIL]"
         print(f"  {status} {pkg}")
     
     print("\nEnv Vars:")
@@ -155,7 +159,7 @@ def _check_pkg(name: str) -> bool:
     try:
         __import__(name)
         return True
-    except ImportError:
+    except Exception:
         return False
 
 @app.get("/api/health", tags=["system"])
@@ -392,6 +396,7 @@ async def create_dataset_search(request: DatasetSearchRequest) -> DatasetSearchR
 
 import zipfile
 import tempfile
+from collections import deque
 
 @app.post("/api/dataset/upload", response_model=DatasetSearchResponse, tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def upload_dataset(file: UploadFile = File(...)) -> DatasetSearchResponse:
@@ -408,19 +413,26 @@ async def upload_dataset(file: UploadFile = File(...)) -> DatasetSearchResponse:
     raw_dir = base_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save uploaded ZIP to a temporary file, then extract
+    # Save uploaded ZIP to a temporary file, then extract safely (Zip Slip prevention)
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-            
+
+        raw_dir_abs = raw_dir.resolve()
         with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+            for member in zip_ref.namelist():
+                member_path = (raw_dir_abs / member).resolve()
+                if not str(member_path).startswith(str(raw_dir_abs)):
+                    raise HTTPException(status_code=400, detail=f"Malicious ZIP entry rejected: {member}")
             zip_ref.extractall(raw_dir)
-            
+
         os.remove(tmp_path)
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="The uploaded file is not a valid ZIP archive.")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Upload extraction failed")
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
@@ -467,7 +479,13 @@ async def upload_seeds(job_id: str, class_name: str, files: list[UploadFile] = F
                     content = await file.read()
                     tmp.write(content)
                     tmp_path = tmp.name
+                seed_dir_abs = seed_dir.resolve()
                 with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+                    for member in zip_ref.namelist():
+                        member_path = (seed_dir_abs / member).resolve()
+                        if not str(member_path).startswith(str(seed_dir_abs)):
+                            logger.warning("Zip Slip attempt in seed upload: %s", member)
+                            continue
                     zip_ref.extractall(seed_dir)
                 os.remove(tmp_path)
                 saved_files.append(f"Extracted {file.filename}")
@@ -736,6 +754,229 @@ async def augment_blurry(req: dict) -> dict[str, Any]:
     return {"status": "started", "job_id": job_id_str, "out_dir": str(out_dir)}
 
 
+# ── Augmentation Agent (standalone, any dataset) ─────────────────────────────
+
+@app.post("/api/dataset/augment-agent", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def run_augmentation_agent(req: AugmentationAgentRequest) -> dict[str, Any]:
+    """
+    Run the standalone Augmentation Agent on any ImageFolder-style dataset.
+
+    Accepts a job_id (from an upload job) or a direct input_dir path.
+    Streams progress events over the job's WebSocket channel.
+    """
+    job_id_str = req.job_id
+
+    # Resolve input directory
+    if req.input_dir:
+        input_dir = Path(req.input_dir)
+    else:
+        try:
+            job_uuid_inner = UUID(job_id_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+        slug = f"local_{job_uuid_inner.hex[:8]}"
+        # Prefer the curated/annotated output; fall back to raw upload
+        base = Path("./cvagent_output") / slug
+        for candidate in [base / "processed", base / "curated", base / "raw"]:
+            if candidate.exists() and any(candidate.iterdir()):
+                input_dir = candidate
+                break
+        else:
+            input_dir = base  # last resort
+
+    if not input_dir.exists():
+        raise HTTPException(status_code=400,
+                            detail=f"Input directory not found: {input_dir}")
+
+    try:
+        job_uuid = UUID(job_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+
+    out_dir = Path("./cvagent_output") / f"local_{job_uuid.hex[:8]}" / "aug_agent_output"
+
+    async def _emit_aug_agent(msg: PipelineMessage):
+        history = job_logs.setdefault(job_uuid, [])
+        history.append(msg)
+        if len(history) > 500:
+            history.pop(0)
+        await manager.broadcast(job_id_str, msg.ws_dict())
+
+    async def _run():
+        await _emit_aug_agent(PipelineMessage(
+            type=MessageType.LOG,
+            message=(
+                f"Augmentation Agent started — strategy={req.strategy.value}, "
+                f"multiplier={req.multiplier}×, target_px={req.target_px}, "
+                f"balance={req.balance}"
+            )
+        ))
+
+        script_path = Path(__file__).resolve().parent / "agent" / "augmentation_agent.py"
+
+        import threading, subprocess
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _worker():
+            try:
+                cmd = [
+                    sys.executable, str(script_path),
+                    "--job-id",      job_id_str,
+                    "--input-dir",   str(input_dir),
+                    "--out-dir",     str(out_dir),
+                    "--strategy",    req.strategy.value,
+                    "--multiplier",  str(req.multiplier),
+                    "--target-size", str(req.target_size),
+                    "--target-px",   str(req.target_px),
+                    "--balance",     str(req.balance).lower(),
+                    "--max-workers", str(req.max_workers),
+                ]
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                )
+                if proc.stdout:
+                    for raw_line in proc.stdout:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip()
+                        if line:
+                            loop.call_soon_threadsafe(queue.put_nowait, line)
+                proc.wait()
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", proc.returncode))
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, ("DONE", 1))
+                logger.error("Augmentation agent subprocess failed: %s", exc)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        exit_code = 0
+        while True:
+            item = await queue.get()
+            if isinstance(item, tuple) and item[0] == "DONE":
+                exit_code = item[1]
+                break
+
+            line = str(item)
+            if line.startswith("AUGAGENT_EVENT:"):
+                try:
+                    payload = json.loads(line[len("AUGAGENT_EVENT:"):])
+                    evt      = payload.get("event", "log")
+                    msg_text = payload.get("message", "")
+                    if evt == "started":
+                        await _emit_aug_agent(PipelineMessage(
+                            type=MessageType.LOG, message=f"Agent: {msg_text}", data=payload))
+                    elif evt == "progress":
+                        await _emit_aug_agent(PipelineMessage(
+                            type=MessageType.LOG, message=msg_text, data=payload))
+                    elif evt == "completed":
+                        await _emit_aug_agent(PipelineMessage(
+                            type=MessageType.DONE, message=msg_text,
+                            data={"augmentation_report": payload}))
+                    elif evt == "error":
+                        await _emit_aug_agent(PipelineMessage(
+                            type=MessageType.ERROR, message=msg_text))
+                    else:
+                        await _emit_aug_agent(PipelineMessage(
+                            type=MessageType.SCRIPT_LOG, message=msg_text))
+                except Exception:
+                    await _emit_aug_agent(PipelineMessage(
+                        type=MessageType.SCRIPT_LOG, message=line))
+            else:
+                await _emit_aug_agent(PipelineMessage(
+                    type=MessageType.SCRIPT_LOG, message=line))
+
+        if exit_code != 0:
+            await _emit_aug_agent(PipelineMessage(
+                type=MessageType.ERROR,
+                message=f"Augmentation agent exited with code {exit_code}"))
+        else:
+            report_path = out_dir / "augmentation_report.json"
+            if report_path.exists():
+                try:
+                    report = json.loads(report_path.read_text(encoding="utf-8"))
+                    await _emit_aug_agent(PipelineMessage(
+                        type=MessageType.TOOL_RESULT,
+                        message="Augmentation complete — report ready.",
+                        data={"augmentation_report": report}
+                    ))
+                except Exception:
+                    pass
+
+    asyncio.create_task(_run())
+    return {
+        "status": "started",
+        "job_id": job_id_str,
+        "input_dir": str(input_dir),
+        "out_dir": str(out_dir),
+    }
+
+
+@app.get("/api/dataset/augment-agent/report/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def get_augmentation_agent_report(job_id: str) -> dict[str, Any]:
+    """Return the augmentation_report.json for a completed augmentation agent run."""
+    try:
+        job_uuid = UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+    slug = f"local_{job_uuid.hex[:8]}"
+    report_path = Path("./cvagent_output") / slug / "aug_agent_output" / "augmentation_report.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="No augmentation report found. Run augmentation first.")
+    try:
+        return json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read report: {exc}")
+
+
+@app.get("/api/dataset/download-augmented-agent/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def download_augmented_agent(job_id: str):
+    """Stream a ZIP of the augmented ImageFolder output from the augmentation agent."""
+    try:
+        job_uuid = UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job_id UUID")
+    slug = f"local_{job_uuid.hex[:8]}"
+    aug_dir = Path("./cvagent_output") / slug / "aug_agent_output"
+    if not aug_dir.exists():
+        raise HTTPException(status_code=404, detail="Augmented dataset not found. Run augmentation first.")
+
+    tmp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip",
+                                          dir=str(Path("./cvagent_output") / slug))
+    tmp_zip_path = Path(tmp_zip.name)
+    tmp_zip.close()
+    try:
+        with zipfile.ZipFile(tmp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for fp in sorted(aug_dir.rglob("*")):
+                if fp.is_file() and fp.suffix.lower() in {".jpg", ".jpeg", ".png", ".json"}:
+                    zf.write(fp, arcname=str(fp.relative_to(aug_dir)))
+
+        file_size = tmp_zip_path.stat().st_size
+
+        def _stream():
+            try:
+                with open(tmp_zip_path, "rb") as f:
+                    while chunk := f.read(65536):
+                        yield chunk
+            finally:
+                try:
+                    tmp_zip_path.unlink()
+                except Exception:
+                    pass
+
+        return StreamingResponse(
+            _stream(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="augmented_{slug}.zip"',
+                "Content-Length": str(file_size),
+            },
+        )
+    except Exception as exc:
+        tmp_zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create ZIP: {exc}")
+
+
 # ── Download Augmented Dataset ────────────────────────────────────────────────
 
 @app.get("/api/dataset/download-augmented/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
@@ -770,24 +1011,26 @@ async def download_augmented(job_id: str):
             detail="No augmented or blur-rejected images found. Run augmentation first."
         )
 
-    def zip_generator():
-        """Yield ZIP bytes chunk by chunk so we don't load everything into RAM."""
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+    # Write ZIP to a temp file on disk to avoid loading entire dataset into RAM (OOM fix)
+    tmp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip", dir=str(base_dir))
+    tmp_zip_path = Path(tmp_zip.name)
+    tmp_zip.close()
+    try:
+        with zipfile.ZipFile(tmp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for src_dir in source_dirs:
-                # folder name inside the ZIP = last path component
                 arc_root = src_dir.name
                 for file_path in sorted(src_dir.rglob("*")):
                     if file_path.is_file():
                         arc_name = arc_root + "/" + str(file_path.relative_to(src_dir))
                         zf.write(file_path, arcname=arc_name)
-        buf.seek(0)
-        while chunk := buf.read(65536):
-            yield chunk
+    except Exception as exc:
+        tmp_zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create ZIP: {exc}")
 
     filename = f"augmented_{slug}.zip"
-    return StreamingResponse(
-        zip_generator(),
+    return FileResponse(
+        path=tmp_zip_path,
+        filename=filename,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -905,27 +1148,31 @@ async def download_dataset(dataset_slug: str, format: str = "zip"):
         raise HTTPException(status_code=404, detail=detail)
 
     zip_filename = f"{dataset_slug}_{format}.zip"
-    zip_path = output_root / zip_filename
+    # Write to a temp file on disk (avoids loading the whole dataset into RAM)
+    tmp_zip_path = Path(tempfile.mktemp(suffix=".zip", dir=str(output_root)))
+    try:
+        if format == "yolo":
+            export_to_yolo_classification(base_dir, tmp_zip_path)
+        elif format == "coco":
+            export_to_coco_classification(base_dir, tmp_zip_path)
+        else:
+            # Raw ImageFolder ZIP, streamed to disk
+            with zipfile.ZipFile(tmp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for fp in sorted(base_dir.rglob("*")):
+                    if fp.is_file():
+                        zf.write(fp, arcname=str(fp.relative_to(base_dir)))
+    except Exception as exc:
+        tmp_zip_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Export failed: {exc}")
 
-    if zip_path.exists():
-        os.remove(zip_path)
-
-    if format == "yolo":
-        # YOLO classification format (folder per class under images/train/)
-        export_to_yolo_classification(base_dir, zip_path)
-    elif format == "coco":
-        export_to_coco_classification(base_dir, zip_path)
-    else:
-        # Default: raw ImageFolder ZIP
-        shutil.make_archive(str(zip_path).replace('.zip', ''), 'zip', str(base_dir))
-
-    if not zip_path.exists():
+    if not tmp_zip_path.exists():
         raise HTTPException(status_code=500, detail="Export failed — zip was not created.")
 
     return FileResponse(
-        path=zip_path,
+        path=tmp_zip_path,
         filename=zip_filename,
         media_type="application/zip",
+        background=BackgroundTask(lambda p=tmp_zip_path: p.unlink(missing_ok=True)),
     )
 
 @app.post("/api/dataset/reply/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
@@ -985,11 +1232,11 @@ async def builder_compile(request: BuilderCompileRequest) -> dict[str, Any]:
 
 
 def _record_training_message(run_id: str, message: PipelineMessage) -> None:
-    state = training_runs.setdefault(run_id, {"recent_messages": []})
-    history = state.setdefault("recent_messages", [])
-    history.append(message.ws_dict())
-    if len(history) > 200:
-        del history[:-200]
+    state = training_runs.setdefault(run_id, {"recent_messages": deque(maxlen=200)})
+    # Ensure legacy list entries are promoted to deque
+    if not isinstance(state.get("recent_messages"), deque):
+        state["recent_messages"] = deque(state.get("recent_messages", []), maxlen=200)
+    state["recent_messages"].append(message.ws_dict())
 
 
 async def _broadcast_training_message(run_id: str, message: PipelineMessage) -> None:
@@ -1441,11 +1688,9 @@ async def websocket_pipeline(
     await manager.connect(websocket, rid)
 
     async def broadcast_emit(msg: PipelineMessage) -> None:
-        # Record log for catch-up
-        history = job_logs.setdefault(job_id, [])
+        # Record log for catch-up — deque(maxlen=500) auto-evicts oldest at O(1)
+        history = job_logs.setdefault(job_id, deque(maxlen=500))
         history.append(msg)
-        if len(history) > 500:
-            history.pop(0)
         # Update job metadata if it's a "done" message
         if msg.type == MessageType.DONE:
             job["status"] = JobState.PENDING if msg.data.get("paused") else JobState.COMPLETED

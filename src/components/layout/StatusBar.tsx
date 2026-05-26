@@ -1,12 +1,15 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { Wifi, Monitor, Clock, Activity, ChevronRight, Cpu, LogOut } from 'lucide-react';
+import { Wifi, Monitor, Clock, Activity, ChevronRight, Cpu, LogOut, Volume2, VolumeX } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { clearToken } from '../../lib/api';
+import { isMuted, toggleMuted } from '../../lib/sounds';
 
 const ROUTE_LABELS: Record<string, string> = {
   '': 'Dashboard',
   dataset: 'Datasets',
+  annotator: 'Annotator',
+  augmentation: 'Augmentation',
   builder: 'Builder',
   analytics: 'Analytics',
   library: 'Library',
@@ -44,8 +47,21 @@ export default function StatusBar() {
   const { user, logout } = useAppStore();
   const [time, setTime] = useState(new Date());
   const [showHardware, setShowHardware] = useState(false);
+  const [muted, setMutedState] = useState(isMuted);
   const popoverRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  const handleToggleMute = () => {
+    const next = toggleMuted();
+    setMutedState(next);
+  };
+
+  // Stay in sync if mute is toggled from another component
+  useEffect(() => {
+    const handler = (e: Event) => setMutedState((e as CustomEvent).detail.muted);
+    window.addEventListener('vc-mute-change', handler);
+    return () => window.removeEventListener('vc-mute-change', handler);
+  }, []);
 
   const handleLogout = () => {
     clearToken();
@@ -155,6 +171,25 @@ export default function StatusBar() {
           <Wifi className="h-3 w-3 text-teal-500" />
           <span className="font-mono text-[10px] text-slate-500">local</span>
         </div>
+        <div className="h-4 w-px bg-slate-800" />
+
+        {/* Sound mute toggle */}
+        <button
+          id="statusbar-mute-btn"
+          onClick={handleToggleMute}
+          title={muted ? 'Notifications muted — click to unmute' : 'Notifications on — click to mute'}
+          className={`flex items-center gap-1 rounded px-2 py-1 transition-all duration-200 ${
+            muted
+              ? 'text-slate-600 hover:text-slate-400 hover:bg-white/5'
+              : 'text-teal-500 hover:text-teal-400 hover:bg-white/5'
+          }`}
+        >
+          {muted
+            ? <VolumeX className="h-3 w-3" />
+            : <Volume2 className="h-3 w-3" />}
+          <span className="font-mono text-[10px]">{muted ? 'muted' : 'sound'}</span>
+        </button>
+
         <div className="h-4 w-px bg-slate-800" />
         <div className="flex items-center gap-1.5">
           <Clock className="h-3 w-3 text-slate-500" />

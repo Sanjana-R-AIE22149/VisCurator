@@ -71,6 +71,7 @@ export default function LibraryPage() {
   const [localModels, setLocalModels] = useState<any[]>([]);
 
   useEffect(() => {
+    document.title = 'Library — VisCurator';
     const t = setTimeout(() => setVisible(true), 60);
     return () => clearTimeout(t);
   }, []);
@@ -225,7 +226,11 @@ export default function LibraryPage() {
                     </button>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-200 truncate">{run.id}</h3>
+                    <h3 className="text-sm font-bold text-slate-200 truncate">
+                      {run.task_type
+                        ? `${String(run.task_type).replace(/_/g, ' ')} · ${run.id.slice(0, 6)}`
+                        : run.id.slice(0, 12)}
+                    </h3>
                     <p className="text-[10px] text-slate-500 font-mono mt-0.5">
                       Acc: {(run.accuracy * 100).toFixed(1)}% · Epochs: {run.epochs}
                     </p>

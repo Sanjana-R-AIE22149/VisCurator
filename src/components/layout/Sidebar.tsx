@@ -12,6 +12,8 @@ import {
   Cpu,
   Zap,
   LogOut,
+  Wand2,
+  ScanSearch,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { clearToken } from '../../lib/api';
@@ -22,13 +24,15 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard',  end: true },
-  { to: '/dataset',    icon: Database,        label: 'Datasets',   end: false },
-  { to: '/annotator',  icon: Layers,          label: 'Annotator',  end: false },
-  { to: '/builder',    icon: Workflow,        label: 'Builder',    end: false },
-  { to: '/analytics',  icon: BarChart3,       label: 'Analytics',  end: false },
-  { to: '/library',    icon: BookOpen,        label: 'Library',    end: false },
-  { to: '/settings',   icon: Settings,        label: 'Settings',   end: false },
+  { to: '/',                  icon: LayoutDashboard, label: 'Dashboard',       end: true  },
+  { to: '/dataset',           icon: Database,        label: 'Datasets',        end: false },
+  { to: '/annotator',         icon: Layers,          label: 'Annotator',       end: false },
+  { to: '/quick-annotator',   icon: ScanSearch,      label: 'Quick Annotate',  end: false },
+  { to: '/augmentation',      icon: Wand2,           label: 'Augmentation',    end: false },
+  { to: '/builder',           icon: Workflow,        label: 'Builder',         end: false },
+  { to: '/analytics',         icon: BarChart3,       label: 'Analytics',       end: false },
+  { to: '/library',           icon: BookOpen,        label: 'Library',         end: false },
+  { to: '/settings',          icon: Settings,        label: 'Settings',        end: false },
 ];
 
 export default function Sidebar({ expanded, onToggle }: SidebarProps) {

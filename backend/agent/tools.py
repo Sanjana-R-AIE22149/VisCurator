@@ -1028,8 +1028,7 @@ def _build_preprocess_script(
     plan: dict[str, Any],
 ) -> str:
     return textwrap.dedent(
-        f"""\
-        #!/usr/bin/env python3
+        f"""#!/usr/bin/env python3
         # Fix HuggingFace datasets multiprocessing on Windows
         import os, sys
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -1118,28 +1117,151 @@ def _build_preprocess_script(
         result_holder = {{}}
         error_holder = {{}}
 
-        def _load():
-            try:
-                from datasets import load_dataset
-                result_holder["ds"] = load_dataset(
-                    DATASET_ID, 
-                    num_proc=1,
-                    download_mode="reuse_cache_if_exists"
-                )
-            except Exception as e:
-                msg = str(e)
-                if "loading script" in msg or "trust_remote_code" in msg:
-                    msg += (
-                        "\\nThis HuggingFace dataset appears to require a deprecated custom "
-                        "loading script. Choose a dataset published in standard imagefolder, "
-                        "Parquet, WebDataset, or COCO files."
-                    )
-                error_holder["err"] = msg
+        # ── Image column discovery ────────────────────────────────────────────
+        # HuggingFace datasets use many different column names for images
+        IMAGE_COL_CANDIDATES = [
+            IMAGE_COL,  # agent-provided name first
+            "image", "img", "image_url", "Image", "photo",
+            "thumbnail", "jpeg", "png", "picture", "frame",
+            "pixel_values", "scan", "file",
+        ]
 
-        print(f"> Loading {{DATASET_ID}} from {{SOURCE}} ...")
-        t = threading.Thread(target=_load)
+        LABEL_COL_CANDIDATES = [
+            LABEL_COL,  # agent-provided name first
+            "label", "labels", "category", "class", "target",
+            "fine_label", "coarse_label", "classification",
+            "annotation", "class_id", "category_id", "species",
+        ]
+
+        def _find_image_col(row: dict) -> str | None:
+            for col in IMAGE_COL_CANDIDATES:
+                if col in row:
+                    val = row[col]
+                    if isinstance(val, dict) and "bytes" in val:
+                        return col
+                    if hasattr(val, "tobytes"):  # PIL Image object
+                        return col
+                    if isinstance(val, bytes) and len(val) > 4:
+                        return col
+            # Last resort: any key whose value looks like image bytes/dict
+            for k, v in row.items():
+                if isinstance(v, dict) and "bytes" in v:
+                    return k
+                if hasattr(v, "tobytes"):
+                    return k
+            return None
+
+        def _find_label_col(row: dict, features=None) -> str | None:
+            for col in LABEL_COL_CANDIDATES:
+                if col in row:
+                    return col
+            # Try detecting a ClassLabel feature from the dataset schema
+            if features:
+                try:
+                    from datasets import ClassLabel
+                    for k, v in features.items():
+                        if isinstance(v, ClassLabel):
+                            return k
+                except Exception:
+                    pass
+            return None
+
+        # ── Strategy 1: load_dataset with all available configs ───────────────
+        def _load_with_configs():
+            from datasets import load_dataset, get_dataset_config_names
+            configs_to_try = []
+            try:
+                configs_to_try = get_dataset_config_names(DATASET_ID, trust_remote_code=True)
+            except Exception:
+                pass
+            if not configs_to_try:
+                configs_to_try = [None]  # use default config
+
+            last_err = None
+            for cfg in configs_to_try:
+                try:
+                    kw = dict(num_proc=1, download_mode="reuse_cache_if_exists", trust_remote_code=True)
+                    if cfg:
+                        kw["name"] = cfg
+                    ds = load_dataset(DATASET_ID, **kw)
+                    if not isinstance(ds, dict):
+                        ds = {{"train": ds}}
+                    # Verify at least one split has rows and an image column
+                    for split_name, split_ds in ds.items():
+                        if len(split_ds) == 0:
+                            continue
+                        row = split_ds[0]
+                        if _find_image_col(row) is not None:
+                            print(f"> Loaded config={{cfg!r}} split={{split_name!r}} rows={{len(split_ds)}}", flush=True)
+                            return ds
+                except Exception as exc:
+                    last_err = exc
+                    print(f"> Config {{cfg!r}} failed: {{exc}}", flush=True)
+            raise RuntimeError(f"All configs failed. Last error: {{last_err}}")
+
+        # ── Strategy 2: Parquet direct download via datasets-server API ────────
+        def _load_from_parquet():
+            '''Download Parquet shards directly from HuggingFace CDN.'''
+            import urllib.request, tempfile, pathlib
+            # Discover parquet URLs via datasets-server
+            api_url = f"https://datasets-server.huggingface.co/parquet?dataset={{DATASET_ID}}"
+            req = urllib.request.Request(api_url, headers={{"User-Agent": "VisCurator/1.0"}})
+            hf_tok = os.environ.get("HF_TOKEN", "")
+            if hf_tok:
+                req.add_header("Authorization", f"Bearer {{hf_tok}}")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                meta = json.loads(resp.read())
+
+            parquet_files = meta.get("parquet_files", [])
+            if not parquet_files:
+                raise RuntimeError("datasets-server returned no Parquet files for this dataset.")
+
+            # Download up to 3 shards (enough to get TARGET_SIZE images)
+            cache_dir = pathlib.Path(tempfile.gettempdir()) / "viscurator_parquet" / DATASET_ID.replace("/", "_")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            local_files = []
+            for pf in parquet_files[:3]:
+                url = pf["url"]
+                local = cache_dir / url.split("/")[-1]
+                if not local.exists():
+                    print(f"> Downloading shard: {{local.name}} ...", flush=True)
+                    req2 = urllib.request.Request(url, headers={{"User-Agent": "VisCurator/1.0"}})
+                    if hf_tok:
+                        req2.add_header("Authorization", f"Bearer {{hf_tok}}")
+                    with urllib.request.urlopen(req2, timeout=120) as r, open(local, "wb") as f:
+                        f.write(r.read())
+                local_files.append(str(local))
+
+            from datasets import load_dataset as _ld
+            ds = _ld("parquet", data_files={{"train": local_files}}, num_proc=1)
+            if not isinstance(ds, dict):
+                ds = {{"train": ds}}
+            return ds
+
+        def _run_load():
+            try:
+                result_holder["ds"] = _load_with_configs()
+                return
+            except Exception as e1:
+                print(f"> load_dataset strategies exhausted ({{e1}}). Trying Parquet fallback ...", flush=True)
+            try:
+                result_holder["ds"] = _load_from_parquet()
+                return
+            except Exception as e2:
+                error_holder["err"] = (
+                    f"load_dataset failed: {{e1}}\n"
+                    f"Parquet fallback failed: {{e2}}\n\n"
+                    "This dataset likely uses a format that cannot be automatically "
+                    "downloaded (e.g., a deprecated custom loading script, gated access, "
+                    "or a non-standard structure). Please choose a different dataset "
+                    "with standard Parquet/ImageFolder structure."
+                )
+
+        print(f"> Loading {{DATASET_ID}} from {{SOURCE}} (with fallback strategies) ...")
+        t = threading.Thread(target=_run_load)
         t.start()
-        t.join(timeout=300)  # 5 minute timeout
+        t.join(timeout=300)
         if t.is_alive():
             print("ERR: Dataset download timed out after 5 minutes", file=sys.stderr)
             sys.exit(1)
@@ -1150,6 +1272,56 @@ def _build_preprocess_script(
 
         if not isinstance(ds, dict):
             ds = {{"train": ds}}
+
+        # ── Auto-discover actual image and label columns ───────────────────────
+        _sample_row = None
+        _sample_features = None
+        for _sname, _sds in ds.items():
+            if len(_sds) > 0:
+                _sample_row = _sds[0]
+                try:
+                    _sample_features = _sds.features
+                except Exception:
+                    pass
+                break
+
+        if _sample_row is not None:
+            _detected_img   = _find_image_col(_sample_row)
+            _detected_label = _find_label_col(_sample_row, _sample_features)
+            if _detected_img and _detected_img != IMAGE_COL:
+                print(f"> Auto-detected image column: {{_detected_img!r}} (was {{IMAGE_COL!r}})", flush=True)
+                IMAGE_COL = _detected_img
+            if _detected_label and _detected_label != LABEL_COL:
+                print(f"> Auto-detected label column: {{_detected_label!r}} (was {{LABEL_COL!r}})", flush=True)
+                LABEL_COL = _detected_label
+
+        # ── Adaptive blur threshold ───────────────────────────────────────────
+        # Fixed threshold of 80 is far too high for small/thumbnail images.
+        # Sample 5 images to estimate median resolution, then scale accordingly.
+        def _adaptive_blur_threshold(ds_dict):
+            sizes = []
+            for _sname, _sds in ds_dict.items():
+                for _r in list(_sds)[:5]:
+                    try:
+                        _img = ensure_rgb(_r.get(IMAGE_COL))
+                        if _img:
+                            sizes.append(_img.width * _img.height)
+                    except Exception:
+                        pass
+                if sizes:
+                    break
+            if not sizes:
+                return BLUR_THRESHOLD_LARGE
+            median_px = sorted(sizes)[len(sizes)//2]
+            # Scale: 224x224=50176px → 60.0, 640x480=307200px → 80.0
+            scaled = 60.0 + (median_px - 50176) / (307200 - 50176) * 20.0
+            return max(10.0, min(100.0, scaled))
+
+        BLUR_THRESHOLD_LARGE = _adaptive_blur_threshold(ds)
+        BLUR_THRESHOLD_SMALL = BLUR_THRESHOLD_LARGE / 10.0
+        print(f"> Adaptive blur threshold: {{BLUR_THRESHOLD_LARGE:.1f}} (small:<{{BLUR_THRESHOLD_SMALL:.1f}})", flush=True)
+
+
 
         output_processed = OUTPUT_DIR / DATASET_ID.replace("/", "_") / "processed"
         output_samples = OUTPUT_DIR / DATASET_ID.replace("/", "_") / "samples"
