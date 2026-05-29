@@ -153,6 +153,10 @@ output_dir = Path("./cvagent_output")
 output_dir.mkdir(exist_ok=True)
 app.mount("/data", StaticFiles(directory=str(output_dir), html=False), name="data")
 
+hf_datasets_dir = Path("./cvagent_datasets")
+hf_datasets_dir.mkdir(exist_ok=True)
+app.mount("/hfdata", StaticFiles(directory=str(hf_datasets_dir), html=False), name="hfdata")
+
 
 # ── Health ───────────────────────────────────────────────────
 
@@ -1114,16 +1118,84 @@ async def list_processed_datasets() -> list[dict[str, Any]]:
     return results
 
 @app.get("/api/dataset/download/{job_id}", tags=["dataset"])
-async def download_dataset(job_id: str):
-    base = Path("./cvagent_datasets") / job_id
-    zips = list(base.parent.glob(f"*_{job_id[:8]}.zip"))
-    if not zips:
-        raise HTTPException(status_code=404, detail="Dataset not ready yet")
-    return FileResponse(
-        path=str(zips[0]),
-        filename=zips[0].name,
-        media_type="application/zip",
-    )
+async def download_dataset(job_id: str, format: str = "zip"):
+    import io as _io
+    dataset_dir = None
+    for candidate in [
+        Path("./cvagent_datasets") / job_id,
+        Path("./cvagent_output") / job_id,
+        Path("./curated_dataset") / job_id,
+        Path("./output") / job_id,
+    ]:
+        if candidate.exists() and candidate.is_dir():
+            dataset_dir = candidate
+            break
+    if dataset_dir is None:
+        zips = list(Path("./cvagent_datasets").glob(f"*_{job_id[:8]}.zip"))
+        if zips:
+            return FileResponse(path=str(zips[0]), filename=zips[0].name, media_type="application/zip")
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    buf = _io.BytesIO()
+    labels_dir = dataset_dir / "labels"
+    images_dir = dataset_dir / "images"
+    anno_dir   = dataset_dir / "annotations"
+    processed_dir = dataset_dir / "processed"
+    data_yaml  = dataset_dir / "data.yaml"
+
+    if format == "yolo":
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            if data_yaml.exists():
+                zf.write(data_yaml, "data.yaml")
+            if labels_dir.exists():
+                for fp in sorted(labels_dir.rglob("*.txt")):
+                    zf.write(fp, str(fp.relative_to(dataset_dir)))
+            if images_dir.exists():
+                for fp in sorted(images_dir.rglob("*")):
+                    if fp.is_file() and fp.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+                        zf.write(fp, str(fp.relative_to(dataset_dir)))
+            elif processed_dir.exists():
+                classes = sorted([d.name for d in processed_dir.iterdir() if d.is_dir()])
+                zf.writestr("data.yaml", f"path: .\ntrain: images/train\nval: images/val\nnc: {len(classes)}\nnames: {classes}\n")
+                for ci, cls in enumerate(classes):
+                    imgs = sorted((processed_dir / cls).glob("*.jpg")) + sorted((processed_dir / cls).glob("*.png"))
+                    for i, img in enumerate(imgs):
+                        split = "train" if i % 5 != 4 else "val"
+                        zf.write(img, f"images/{split}/{cls}_{img.name}")
+                        zf.writestr(f"labels/{split}/{cls}_{img.stem}.txt", f"{ci} 0.5 0.5 1.0 1.0\n")
+        filename = f"{job_id}_yolo.zip"
+
+    elif format == "coco":
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            if anno_dir.exists():
+                for fp in sorted(anno_dir.glob("*.json")):
+                    zf.write(fp, f"annotations/{fp.name}")
+                if images_dir.exists():
+                    for fp in sorted(images_dir.rglob("*")):
+                        if fp.is_file() and fp.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+                            zf.write(fp, str(fp.relative_to(dataset_dir)))
+            elif processed_dir.exists():
+                from backend.agent.export_utils import export_to_coco_classification
+                import tempfile as _tmp
+                tmp = Path(_tmp.mktemp(suffix=".zip"))
+                export_to_coco_classification(processed_dir, tmp)
+                buf = _io.BytesIO(tmp.read_bytes())
+                tmp.unlink(missing_ok=True)
+                buf.seek(0)
+                return StreamingResponse(buf, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{job_id}_coco.zip"'})
+        filename = f"{job_id}_coco.zip"
+
+    else:
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for fp in sorted(dataset_dir.rglob("*")):
+                if fp.is_file() and fp.suffix.lower() in {".jpg", ".jpeg", ".png", ".json", ".txt", ".yaml"}:
+                    zf.write(fp, str(fp.relative_to(dataset_dir)))
+        filename = f"{job_id}.zip"
+
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 @app.post("/api/dataset/reply/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def reply_to_job(job_id: UUID, body: dict[str, Any]) -> dict[str, Any]:

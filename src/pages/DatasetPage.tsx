@@ -69,6 +69,11 @@ export default function DatasetPage() {
     ? preprocessingReport.dataset_id.replace(/\//g, '_')
     : null;
 
+  // For HF pipeline jobs use the UUID job_id for downloads; for local use the slug
+  const downloadId = preprocessingReport?.hf_pipeline && preprocessingReport?.job_id
+    ? preprocessingReport.job_id
+    : (jobId ?? currentSlug);
+
   // ── Determine if dataset is "short" ──────────────────────────────────────────
   const actualCount  = preprocessingReport?.after_stats?.images ?? null;
   const isShort      = actualCount !== null && actualCount < targetSize;
@@ -117,6 +122,11 @@ export default function DatasetPage() {
   const annotationSummary = preprocessingReport?.annotation_summary;
   const deblurPreview = preprocessingReport?.deblur_preview ?? preprocessingReport?.stage_samples?.recovered ?? [];
   const deblurSummary = preprocessingReport?.deblur_summary;
+
+  // HF pipeline previews are served from /hfdata; local upload from /data
+  const previewBaseUrl = preprocessingReport?.hf_pipeline
+    ? `${BASE_URL}/hfdata/${preprocessingReport?.job_id}`
+    : `${BASE_URL}/data/${preprocessingReport?.dataset_id?.replace(/\//g, '_')}`;
 
   // ── Class distribution bars ───────────────────────────────────────────────────
   const classDist = preprocessingReport?.class_distribution ?? {};
@@ -293,7 +303,7 @@ export default function DatasetPage() {
             </p>
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
               {filteredSamples.slice(0, 24).map((s, i) => {
-                const baseUrl = `${BASE_URL}/data/${preprocessingReport?.dataset_id?.replace(/\//g, '_')}`;
+                const baseUrl = previewBaseUrl;
                 return (
                   <div
                     key={i}
@@ -346,7 +356,7 @@ export default function DatasetPage() {
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {deblurPreview.slice(0, 8).map((s, i) => {
-                const baseUrl = `${BASE_URL}/data/${preprocessingReport?.dataset_id?.replace(/\//g, '_')}`;
+                const baseUrl = previewBaseUrl;
                 return (
                   <div key={i} className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-3">
                     <div className="grid grid-cols-2 gap-3">
@@ -496,7 +506,7 @@ export default function DatasetPage() {
         </div>
 
         {/* ── Download bar (after active job) ── */}
-        {preprocessingReport && jobId && currentSlug && (
+        {preprocessingReport && downloadId && (
           <div className="flex items-center gap-3 rounded-xl border border-teal-500/20 bg-teal-500/5 px-4 py-3">
             <div className="flex-1">
               <p className="text-xs font-semibold text-teal-300">Pipeline complete — ready to download</p>
@@ -508,7 +518,7 @@ export default function DatasetPage() {
               {(['zip', 'coco', 'yolo'] as const).map((fmt) => (
                 <a
                   key={fmt}
-                  href={`${BASE_URL}/api/dataset/download/${currentSlug}?format=${fmt}`}
+                  href={`${BASE_URL}/api/dataset/download/${downloadId}?format=${fmt}`}
                   download
                   className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/15 px-3 py-2 text-xs font-semibold text-teal-400 hover:bg-teal-500/25 transition-colors"
                 >

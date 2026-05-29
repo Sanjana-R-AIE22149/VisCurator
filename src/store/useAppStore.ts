@@ -75,6 +75,8 @@ export interface ProcessingPlan {
 
 export interface PreprocessingReport {
   dataset_id: string;
+  job_id?: string;
+  hf_pipeline?: boolean;
   output_dir?: string;
   plan?: ProcessingPlan;
   before_stats?: {

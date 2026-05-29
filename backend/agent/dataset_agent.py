@@ -127,6 +127,59 @@ class DatasetAgent:
                     "class_distribution": clean_result.get("class_distribution", {}),
                     "annotation_summary": anno_result.get("summary") if class_names else None,
                     "zip_path": str(zip_path),
+                    "preprocessing_report": {
+                        "dataset_id": best["dataset_id"],
+                        "job_id": self.job_id,
+                        "hf_pipeline": True,
+                        "before_stats": {
+                            "images": clean_result.get("total_downloaded", 0)
+                                      + clean_result.get("rejected_blur", 0)
+                                      + clean_result.get("rejected_dup", 0)
+                                      + clean_result.get("rejected_small", 0),
+                        },
+                        "after_stats": {
+                            "images": clean_result["total_downloaded"],
+                            "blur_filtered": clean_result.get("rejected_blur", 0),
+                            "duplicates_removed": clean_result.get("rejected_dup", 0),
+                            "class_distribution": clean_result.get("class_distribution", {}),
+                        },
+                        "class_distribution": clean_result.get("class_distribution", {}),
+                        "stage_samples": {
+                            "raw": [],
+                            "filtered": [
+                                {"url": p.replace("\\", "/"), "label": "blurry", "reason": "blurry", "id": i}
+                                for i, p in enumerate(clean_result.get("blurry_preview_paths", []))
+                            ] + [
+                                {"url": p.replace("\\", "/"), "label": "duplicate", "reason": "duplicate", "id": i + 100}
+                                for i, p in enumerate(clean_result.get("dup_preview_paths", []))
+                            ],
+                            "processed": [
+                                {"url": p.replace("\\\\", "/"), "label": "accepted", "id": i}
+                                for i, p in enumerate(clean_result.get("processed_preview_paths", []))
+                            ],
+                        },
+                        "deblur_preview": anno_result.get("deblur_preview", []),
+                        "deblur_summary": {
+                            "recovered_for_export": len(anno_result.get("deblur_preview", [])),
+                            "avg_before": round(
+                                sum(d["before_blur"] for d in anno_result.get("deblur_preview", [])) /
+                                max(len(anno_result.get("deblur_preview", [])), 1), 1
+                            ),
+                            "avg_after": round(
+                                sum(d["after_blur"] for d in anno_result.get("deblur_preview", [])) /
+                                max(len(anno_result.get("deblur_preview", [])), 1), 1
+                            ),
+                        } if anno_result.get("deblur_preview") else None,
+                        "annotation_summary": {
+                            "available": bool(class_names and anno_result.get("status") == "success"),
+                            "count": anno_result.get("verified_count", 0),
+                            "generator": "CLIP + GrabCut BBox",
+                        },
+                        "formats": {
+                            "yolo": "data.yaml + labels/train/*.txt + labels/val/*.txt",
+                            "coco": "annotations/instances_train.json + instances_val.json",
+                        },
+                    },
                 },
             )
         except Exception as e:
