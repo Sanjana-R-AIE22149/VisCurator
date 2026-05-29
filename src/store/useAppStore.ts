@@ -93,11 +93,38 @@ export interface PreprocessingReport {
     augmented_images?: number;
     synthetic_generation_recommended?: boolean;
   };
+  annotation_summary?: {
+    available?: boolean;
+    count?: number;
+    generator?: string | null;
+    error?: string | null;
+  };
+  deblur_summary?: {
+    recovered_for_export?: number;
+    avg_before?: number;
+    avg_after?: number;
+  };
+  deblur_preview?: Array<{
+    id: number;
+    label: string;
+    before_url: string;
+    after_url: string;
+    before_blur: number;
+    after_blur: number;
+  }>;
   blur_scatter?: Array<{ id: number; laplacian: number; resolution: number; accepted: boolean }>;
   stage_samples?: {
     raw: Array<{ url: string; label: string; id: number }>;
     filtered: Array<{ url: string; label: string; reason: string; id: number }>;
     processed: Array<{ url: string; label: string; id: number }>;
+    recovered?: Array<{
+      id: number;
+      label: string;
+      before_url: string;
+      after_url: string;
+      before_blur: number;
+      after_blur: number;
+    }>;
   };
 }
 

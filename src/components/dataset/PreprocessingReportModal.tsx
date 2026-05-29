@@ -30,6 +30,17 @@ interface PreprocessingReport {
     augmented_images?: number;
     synthetic_generation_recommended?: boolean;
   };
+  annotation_summary?: {
+    available?: boolean;
+    count?: number;
+    generator?: string | null;
+    error?: string | null;
+  };
+  deblur_summary?: {
+    recovered_for_export?: number;
+    avg_before?: number;
+    avg_after?: number;
+  };
   blur_scatter?: BlurPoint[];
 }
 
@@ -43,7 +54,6 @@ const TT    = {
 function ClassDistChart({ dist }: { dist: Record<string, number> }) {
   const data = Object.entries(dist)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
     .map(([name, count]) => ({ name, count }));
 
   return (
@@ -206,6 +216,32 @@ export default function PreprocessingReportModal({ jobId, onClose }: Props) {
                       </span>
                     )}
                   </div>
+                </div>
+              )}
+
+              {report.annotation_summary && (
+                <div className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Annotations</p>
+                  <p className="text-xs text-slate-300">
+                    {report.annotation_summary.available
+                      ? `${report.annotation_summary.count ?? 0} detection boxes ready for YOLO/COCO export`
+                      : report.annotation_summary.error || 'Annotation generation has not completed yet.'}
+                  </p>
+                  {report.annotation_summary.generator && (
+                    <p className="text-[10px] font-mono text-slate-500">Generator: {report.annotation_summary.generator}</p>
+                  )}
+                </div>
+              )}
+
+              {report.deblur_summary && (report.deblur_summary.recovered_for_export ?? 0) > 0 && (
+                <div className="rounded-xl border border-slate-800/50 bg-slate-900/30 px-4 py-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Deblur recovery</p>
+                  <p className="text-xs text-slate-300">
+                    Recovered {report.deblur_summary.recovered_for_export ?? 0} blurry images for export.
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-500">
+                    Laplacian {report.deblur_summary.avg_before ?? 0} → {report.deblur_summary.avg_after ?? 0}
+                  </p>
                 </div>
               )}
 

@@ -5,10 +5,8 @@ Converts the processed ImageFolder structure into COCO JSON,
 YOLO classification, and YOLO detection (dummy bbox) formats.
 """
 import json
-import os
 import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 
 
@@ -21,6 +19,16 @@ def _iter_images(processed_dir: Path):
             yield class_dir.name, img_path
         for img_path in sorted(class_dir.glob("*.png")):
             yield class_dir.name, img_path
+
+
+def _load_annotation_manifest(processed_dir: Path):
+    manifest_path = processed_dir / "annotations_manifest.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
 
 
 def export_to_yolo_classification(processed_dir: Path, output_zip: Path):
@@ -84,13 +92,16 @@ def export_to_coco_classification(processed_dir: Path, output_zip: Path):
 
     categories = []
     class_map: dict[str, int] = {}
-    for i, cls in enumerate(sorted([d.name for d in processed_dir.iterdir() if d.is_dir()])):
+    classes = sorted([d.name for d in processed_dir.iterdir() if d.is_dir()])
+    for i, cls in enumerate(classes):
         categories.append({"id": i, "name": cls, "supercategory": "none"})
         class_map[cls] = i
 
     images_meta = []
     annotations_meta = []
     img_id = 0
+    manifest = _load_annotation_manifest(processed_dir)
+    manifest_by_path = {entry.get("image_path"): entry for entry in manifest if isinstance(entry, dict)}
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -117,12 +128,14 @@ def export_to_coco_classification(processed_dir: Path, output_zip: Path):
                 "width": w,
                 "height": h,
             })
+            manifest_entry = manifest_by_path.get(rel_name)
+            bbox = manifest_entry.get("bbox_xywh") if manifest_entry else [0, 0, w, h]
             annotations_meta.append({
                 "id": img_id,
                 "image_id": img_id,
                 "category_id": class_map[cls],
-                "area": w * h,
-                "bbox": [0, 0, w, h],
+                "area": int(bbox[2]) * int(bbox[3]),
+                "bbox": bbox,
                 "iscrowd": 0,
             })
             img_id += 1
@@ -154,22 +167,32 @@ def export_to_yolo_detection(processed_dir: Path, output_zip: Path):
         data.yaml
     """
     classes = sorted([d.name for d in processed_dir.iterdir() if d.is_dir()])
+    manifest = _load_annotation_manifest(processed_dir)
+    manifest_by_path = {entry.get("image_path"): entry for entry in manifest if isinstance(entry, dict)}
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        (tmp_path / "images").mkdir()
-        (tmp_path / "labels").mkdir()
+        (tmp_path / "dataset" / "images").mkdir(parents=True)
+        (tmp_path / "dataset" / "labels").mkdir(parents=True)
 
         with open(tmp_path / "data.yaml", "w") as f:
             f.write(f"names: {classes}\n")
             f.write(f"nc: {len(classes)}\n")
-            f.write("train: ./images\nval: ./images\n")
+            f.write("path: ./dataset\n")
+            f.write("train: images\n")
+            f.write("val: images\n")
 
         for class_idx, class_name in enumerate(classes):
-            for img_path in (processed_dir / class_name).glob("*.jpg"):
+            for img_path in sorted((processed_dir / class_name).glob("*.jpg")):
                 new_name = f"{class_name}_{img_path.name}"
-                shutil.copy(img_path, tmp_path / "images" / new_name)
-                label_file = tmp_path / "labels" / f"{Path(new_name).stem}.txt"
-                label_file.write_text(f"{class_idx} 0.5 0.5 1.0 1.0\n")
+                shutil.copy(img_path, tmp_path / "dataset" / "images" / new_name)
+                label_file = tmp_path / "dataset" / "labels" / f"{Path(new_name).stem}.txt"
+                rel_path = f"{class_name}/{img_path.name}"
+                manifest_entry = manifest_by_path.get(rel_path)
+                yolo_box = manifest_entry.get("bbox_yolo") if manifest_entry else [0.5, 0.5, 1.0, 1.0]
+                label_file.write_text(
+                    f"{class_idx} {yolo_box[0]} {yolo_box[1]} {yolo_box[2]} {yolo_box[3]}\n",
+                    encoding="utf-8",
+                )
 
         shutil.make_archive(str(output_zip).replace(".zip", ""), "zip", tmp)

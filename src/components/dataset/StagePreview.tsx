@@ -10,6 +10,7 @@ export default function StagePreview() {
   }
 
   const { raw, filtered, processed } = preprocessingReport.stage_samples;
+  const previewLimit = 12;
 
   const getImageUrl = (url: string) => {
     // The url in the report is relative to the dataset output dir
@@ -23,7 +24,7 @@ export default function StagePreview() {
       <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
         <Layers className="h-4 w-4 text-teal-400" />
         <h3 className="text-sm font-bold uppercase tracking-wider text-slate-200">Processing Stages</h3>
-        <span className="ml-auto text-[10px] text-slate-500 font-mono">Visual verification samples</span>
+        <span className="ml-auto text-[10px] text-slate-500 font-mono">Previewing up to {previewLimit} per stage</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -33,8 +34,11 @@ export default function StagePreview() {
             <ImageIcon className="h-3.5 w-3.5 text-slate-400" />
             <span className="text-xs font-semibold text-slate-300">1. Original Samples</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {raw.slice(0, 4).map((img, i) => (
+          <div className="flex items-center justify-between px-1 text-[10px] text-slate-500">
+            <span>{raw.length} captured</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {raw.slice(0, previewLimit).map((img, i) => (
               <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50">
                 <img 
                   src={getImageUrl(img.url)} 
@@ -55,9 +59,12 @@ export default function StagePreview() {
             <Filter className="h-3.5 w-3.5 text-rose-400" />
             <span className="text-xs font-semibold text-rose-300">2. Rejected (Blur/Dup)</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center justify-between px-1 text-[10px] text-rose-300/80">
+            <span>{filtered.length} rejected shown</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             {filtered.length > 0 ? (
-              filtered.slice(0, 4).map((img, i) => (
+              filtered.slice(0, previewLimit).map((img, i) => (
                 <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-rose-500/20 bg-rose-500/5">
                   <img 
                     src={getImageUrl(img.url)} 
@@ -83,8 +90,11 @@ export default function StagePreview() {
             <Zap className="h-3.5 w-3.5 text-emerald-400" />
             <span className="text-xs font-semibold text-emerald-300">3. Curated & Augmented</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {processed.slice(0, 4).map((img, i) => (
+          <div className="flex items-center justify-between px-1 text-[10px] text-emerald-300/80">
+            <span>{processed.length} curated previews</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {processed.slice(0, previewLimit).map((img, i) => (
               <div key={i} className="group relative aspect-square overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/5 ring-1 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                 <img 
                   src={getImageUrl(img.url)} 

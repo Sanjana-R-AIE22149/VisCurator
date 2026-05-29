@@ -1,9 +1,11 @@
 # VisCurator Project Status
 
 ## Summary
-VisCurator is now a credible demo-grade AI-assisted CV engineering workflow prototype. The core dataset -> builder -> training -> analytics path is integrated end to end, but a few surfaces are still mock-backed or intentionally stubbed for demo speed.
+VisCurator is a full-featured demo-grade AI-assisted CV engineering platform. The core dataset → annotator → augmentation → builder → training → analytics path is integrated end to end. Most major features now have real backend implementations; a few surfaces remain intentionally stubbed for demo speed.
 
 ## Fully Working Features
+
+### CVAgent Dataset Pipeline
 - Dataset search kickoff via `POST /api/dataset/search`
 - Dataset agent websocket flow via `/ws/pipeline/{job_id}`
 - Agent-driven dataset analysis using dataset metadata, blur estimation, duplicate estimation, class balance, and deterministic preprocessing planning
@@ -13,26 +15,56 @@ VisCurator is now a credible demo-grade AI-assisted CV engineering workflow prot
   - resize normalization
   - Albumentations-based augmentation
   - preprocessing report export
+- Dataset export in YOLO Classification, YOLO Detection, and COCO JSON formats
+
+### Local Upload & Annotation Pipeline
+- ZIP upload of raw images via `POST /api/dataset/upload`
+- Seed image upload per class for CLIP zero-shot classification
+- SAM + CLIP auto-annotation subprocess (`backend/agent/annotator.py`)
+- Anti-blur recovery + Albumentations augmentation subprocess (`backend/agent/augmenter.py`)
+- Annotation report and augmented dataset download endpoints
+
+### Quick Annotator (In-Browser)
+- DETR object detection via Transformers.js (runs entirely in-browser, no backend)
+- Custom class name mapping
+- Interactive bounding-box review and class correction
+- YOLO-format ZIP export (data.yaml + label files)
+
+### Augmentation Agent
+- Standalone augmentation on any ImageFolder dataset
+- 5 strategy profiles: light, medium, heavy, medical, adversarial
+- Class-aware balancing (minority classes get extra variants)
+- Perceptual hash deduplication of augmented outputs
+- Parallel execution with configurable workers
+- Full augmentation report with expansion ratio and per-class stats
+
+### Builder & Training
 - Library-to-Builder cloning for `YOLOv8n`, `ResNet50`, `EfficientDet`, and `DETR`
 - Builder graph rendering with existing node/edge schema
 - Builder compile to PyTorch via `/api/builder/compile`
 - Training run creation via `POST /api/builder/train`
+- Compare Mode (A/B training: curated vs. raw dataset in parallel)
 - Training websocket streaming via `/ws/train/{run_id}`
 - SQLite-backed training metrics via `backend/data/training_metrics.db`
 - Analytics page backed by real training run and metrics APIs
 - Live builder terminal/training terminal log updates
 
+### Infrastructure
+- JWT authentication (`backend/auth.py`) with bcrypt password hashing
+- Real-time system telemetry endpoint (`GET /api/system/telemetry`) — CPU, RAM, disk, GPU via psutil/pynvml
+- Self-healing launcher (`VisCurator_launch.py`) with package auto-install and backend restart
+
 ## Partially Implemented Features
-- Dataset pipeline depends on NVIDIA NIM for the agent reasoning layer; when NIM is unavailable, dataset orchestration cannot complete
-- Copilot analysis panel is real when backend/NIM are available, but now degrades to a plain unavailable state instead of fake output
-- Dashboard combines real recent activity and dataset stats with a still-static infrastructure summary card
-- Preprocessing works best for HuggingFace-backed datasets; broader source normalization is not fully generalized
+- Dataset pipeline depends on NVIDIA NIM for agent reasoning; when NIM is unavailable, dataset orchestration cannot complete
+- Copilot analysis panel is real when backend/NIM are available, but degrades to an unavailable state rather than generating fake output
+- Dashboard combines real recent activity and dataset stats with a partially presentational infrastructure summary card
+- Preprocessing is most robust with HuggingFace-backed datasets; broader source normalization is not fully generalized
+- Auth is JWT-based with bcrypt (real), but user management is single-user via environment variables (no multi-user admin UI)
 
 ## Mock-Backed or Stubbed Features
-- Login/auth flow is local mock auth only
 - Setup modal NIM connection test is simulated
-- `Settings` route is a placeholder stub
-- Some dashboard infrastructure numbers are presentational rather than measured from the machine
+- `Settings` route (`/settings`) is a placeholder stub with "Coming soon"
+- Some dashboard infrastructure numbers are still presentational rather than live-measured
 
 ## WebSocket-Connected Flows
 - Dataset pipeline:
@@ -87,12 +119,13 @@ What is real:
 - compile endpoint produces deterministic PyTorch code
 - compile modal shows real generated code
 
-## Missing Integrations / Future Roadmap (V2)
-- **Local Dataset Upload (Drag & Drop)**: Enable users to bypass HuggingFace and upload their own raw image folders.
-- **Auto-Annotation Agent**: A new specialized agent (utilizing foundation models like Grounding DINO or a NIM vision endpoint) to automatically label/box unlabeled datasets based on zero-shot user prompts.
-- No real auth/backend identity integration
-- No real machine telemetry feeding dashboard hardware cards
-- No unified run history across dataset jobs, builder compile artifacts, and training runs
+## Future Roadmap (V2)
+- **Multi-user authentication**: Replace single-user env-var config with a proper user database and admin panel.
+- **Grounding DINO / NIM Vision**: Extend the Annotator with open-vocabulary detection for richer auto-labeling (beyond CLIP zero-shot classification).
+- **Unified Run History**: Cross-reference dataset jobs, compile artifacts, and training runs in a single timeline view.
+- **Real Docker Deployment**: Provide a `Dockerfile` + `docker-compose.yml` for production-grade containerised deployment with Nginx and SSL.
+- **Export to GitHub**: Push generated model code and configs to a user's GitHub repository.
+- **W&B / ClearML Integration**: Export training runs to external experiment tracking platforms.
 
 ## Dead Routes / Stub Routes
 - `/settings` is intentionally a stub placeholder in `src/App.tsx`

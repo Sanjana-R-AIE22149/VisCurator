@@ -91,6 +91,8 @@ def _build_train_script() -> str:
         import torch
         import torch.nn as nn
         from torch.utils.data import DataLoader, Dataset, random_split
+        from PIL import Image
+        import numpy as np
 
         RUN_DIR = Path(__file__).resolve().parent
         if str(RUN_DIR) not in sys.path:
@@ -121,6 +123,77 @@ def _build_train_script() -> str:
                 self.size, self.c, self.h, self.w, self.classes = size, c, h, w, classes
             def __len__(self): return self.size
             def __getitem__(self, i): return torch.randn(self.c, self.h, self.w), i % self.classes
+
+        class Compose:
+            def __init__(self, funcs):
+                self.funcs = funcs
+            def __call__(self, image):
+                for fn in self.funcs:
+                    image = fn(image)
+                return image
+
+        class Resize:
+            def __init__(self, size):
+                self.size = size
+            def __call__(self, image):
+                return image.resize((self.size[1], self.size[0]))
+
+        class RandomHorizontalFlip:
+            def __init__(self, p=0.5):
+                self.p = p
+            def __call__(self, image):
+                return image.transpose(Image.FLIP_LEFT_RIGHT) if torch.rand(1).item() < self.p else image
+
+        class ColorJitter:
+            def __init__(self, brightness=0.0, contrast=0.0):
+                self.brightness = brightness
+                self.contrast = contrast
+            def __call__(self, image):
+                arr = np.asarray(image, dtype=np.float32) / 255.0
+                if self.brightness > 0:
+                    factor = 1.0 + (torch.rand(1).item() * 2 - 1) * self.brightness
+                    arr = arr * factor
+                if self.contrast > 0:
+                    mean = arr.mean(axis=(0, 1), keepdims=True)
+                    factor = 1.0 + (torch.rand(1).item() * 2 - 1) * self.contrast
+                    arr = (arr - mean) * factor + mean
+                arr = np.clip(arr, 0.0, 1.0)
+                return Image.fromarray((arr * 255).astype("uint8"))
+
+        class ToTensor:
+            def __call__(self, image):
+                arr = np.asarray(image, dtype=np.float32) / 255.0
+                arr = np.transpose(arr, (2, 0, 1))
+                return torch.from_numpy(arr)
+
+        class Normalize:
+            def __init__(self, mean, std):
+                self.mean = torch.tensor(mean, dtype=torch.float32).view(-1, 1, 1)
+                self.std = torch.tensor(std, dtype=torch.float32).view(-1, 1, 1)
+            def __call__(self, tensor):
+                return (tensor - self.mean) / self.std
+
+        class SimpleImageFolder(Dataset):
+            def __init__(self, root, transform=None):
+                self.root = Path(root)
+                self.transform = transform
+                self.classes = sorted([d.name for d in self.root.iterdir() if d.is_dir()])
+                self.class_to_idx = {name: idx for idx, name in enumerate(self.classes)}
+                self.samples = []
+                valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+                for class_name in self.classes:
+                    class_dir = self.root / class_name
+                    for file_path in sorted(class_dir.rglob("*")):
+                        if file_path.is_file() and file_path.suffix.lower() in valid_exts:
+                            self.samples.append((file_path, self.class_to_idx[class_name]))
+            def __len__(self):
+                return len(self.samples)
+            def __getitem__(self, index):
+                file_path, label = self.samples[index]
+                image = Image.open(file_path).convert("RGB")
+                if self.transform:
+                    image = self.transform(image)
+                return image, label
 
         def compute_metrics(model, loader, device, num_classes):
             \"\"\"Compute accuracy, precision, recall, mAP on a val loader.\"\"\"
@@ -192,10 +265,9 @@ def _build_train_script() -> str:
             train_loader, val_loader = None, None
             using_real_data = False
             try:
-                import torchvision.transforms as T
-                from torchvision.datasets import ImageFolder
-                ds_path = config.get("dataset_path")
-                if ds_path and os.path.exists(ds_path):
+                try:
+                    import torchvision.transforms as T
+                    from torchvision.datasets import ImageFolder
                     tf = T.Compose([
                         T.Resize((config["input_height"], config["input_width"])),
                         T.RandomHorizontalFlip(),
@@ -208,8 +280,28 @@ def _build_train_script() -> str:
                         T.ToTensor(),
                         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
                     ])
-                    full_train = ImageFolder(ds_path, transform=tf)
-                    full_val = ImageFolder(ds_path, transform=val_tf)
+                    dataset_cls = ImageFolder
+                    emit_event("log", "Loaded torchvision dataset pipeline.")
+                except Exception as tv_ex:
+                    T = None
+                    dataset_cls = SimpleImageFolder
+                    tf = Compose([
+                        Resize((config["input_height"], config["input_width"])),
+                        RandomHorizontalFlip(),
+                        ColorJitter(brightness=0.2, contrast=0.2),
+                        ToTensor(),
+                        Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                    ])
+                    val_tf = Compose([
+                        Resize((config["input_height"], config["input_width"])),
+                        ToTensor(),
+                        Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                    ])
+                    emit_event("log", f"torchvision unavailable ({tv_ex}); using built-in image loader.")
+                ds_path = config.get("dataset_path")
+                if ds_path and os.path.exists(ds_path):
+                    full_train = dataset_cls(ds_path, transform=tf)
+                    full_val = dataset_cls(ds_path, transform=val_tf)
                     num_classes = len(full_train.classes)
                     config["num_classes"] = num_classes
                     
@@ -312,4 +404,3 @@ def _build_train_script() -> str:
                 emit_event("error", traceback.format_exc())
         """
     )
-

@@ -41,7 +41,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.agent.dataset_agent import DatasetAgent
 from backend.agent.nim_client import NIMClient
-from backend.agent.tools import search_datasets
+from backend.agent.tools import search_huggingface
 from backend.auth import get_current_user, router as auth_router
 from backend.models.schemas import (
     AugmentationAgentRequest,
@@ -77,6 +77,7 @@ logger = logging.getLogger("viscurator")
 jobs: dict[UUID, dict[str, Any]] = {}
 job_logs: dict[UUID, deque] = {}   # deque(maxlen=500) per job — O(1) append/trim
 training_runs: dict[str, dict[str, Any]] = {}
+active_jobs: dict[str, dict[str, Any]] = {}
 
 # Agent sessions persist between WS connections so conversations continue
 # after the user answers a question
@@ -141,7 +142,7 @@ app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "null", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,15 +197,8 @@ async def health_check() -> dict[str, Any]:
 @app.get("/api/dataset/test-run", tags=["dataset"], dependencies=[Depends(get_current_user)])
 async def dataset_test_run() -> dict[str, Any]:
     """Minimal end-to-end sanity check WITHOUT the agent."""
-    from backend.agent.tools import generate_and_run_script
-    
     logger.info("Starting minimal pipeline test run...")
-    result = await generate_and_run_script(
-        dataset_id="ylecun/mnist",
-        target_size=10,
-        output_dir="./test_output"
-    )
-    return result
+    return await search_huggingface("cats dogs", max_results=3)
 
 
 # ── System Telemetry ──────────────────────────────────────────
@@ -376,22 +370,41 @@ async def inspect_dataset(path: str):
 
 
 
-@app.post("/api/dataset/search", response_model=DatasetSearchResponse, tags=["dataset"], dependencies=[Depends(get_current_user)])
-async def create_dataset_search(request: DatasetSearchRequest) -> DatasetSearchResponse:
-    job_id = uuid4()
-    now = datetime.utcnow()
-    jobs[job_id] = {
-        "job_id": job_id,
-        "status": JobState.PENDING,
-        "progress": 0.0,
-        "message": "Job created.",
-        "result": {},
-        "request": request.model_dump(),
-        "created_at": now,
-        "updated_at": now,
+@app.post("/api/dataset/search", tags=["dataset"], dependencies=[Depends(get_current_user)])
+async def create_dataset_search(request: DatasetSearchRequest) -> dict[str, Any]:
+    job_id = str(uuid4())
+    queue: asyncio.Queue = asyncio.Queue()
+
+    active_jobs[job_id] = {
+        "status": "running",
+        "queue": queue,
+        "created_at": datetime.utcnow().isoformat(),
     }
-    logger.info("Job %s created — query='%s'", job_id, request.query)
-    return DatasetSearchResponse(job_id=job_id, status=JobState.PENDING, created_at=now)
+
+    class QueueWebSocket:
+        async def send_json(self, data):
+            await queue.put(data)
+
+    async def run_pipeline():
+        try:
+            agent = DatasetAgent(
+                websocket=QueueWebSocket(),
+                job_id=job_id,
+                nim_client=nim_client,
+            )
+            await agent.run(
+                query=request.query,
+                source=str(request.source),
+                target_size=request.target_size,
+            )
+        except Exception as e:
+            logger.exception("Queue-based dataset pipeline failed")
+            await queue.put({"id": uuid4().hex, "type": "error", "message": str(e), "data": {}, "timestamp": datetime.utcnow().isoformat()})
+        finally:
+            active_jobs[job_id]["status"] = "completed"
+
+    asyncio.create_task(run_pipeline())
+    return {"job_id": job_id, "status": "running"}
 
 
 import zipfile
@@ -1100,79 +1113,16 @@ async def list_processed_datasets() -> list[dict[str, Any]]:
             })
     return results
 
-@app.get("/api/dataset/download/{dataset_slug}", tags=["dataset"])
-async def download_dataset(dataset_slug: str, format: str = "zip"):
-    """Zip and download a processed dataset in zip, coco, or yolo format."""
-    output_root = Path("./cvagent_output")  # default for new jobs
-
-    # All directories where output may have been written
-    ALL_ROOTS = [
-        Path("./cvagent_output"),
-        Path("./curated_dataset"),
-        Path("./output"),
-    ]
-
-    def _find_processed(slug: str) -> Path | None:
-        # Try exact + normalised variants in every known root
-        for root in ALL_ROOTS:
-            for variant in (slug, slug.replace("-", "_"), slug.replace("_", "-")):
-                p = root / variant / "processed"
-                try:
-                    if p.exists() and any(p.iterdir()):
-                        return p
-                except Exception:
-                    pass
-        # Fuzzy scan across all roots
-        norm = slug.lower().replace("-", "_")
-        for root in ALL_ROOTS:
-            if not root.exists():
-                continue
-            for subdir in root.iterdir():
-                if subdir.is_dir() and subdir.name.lower().replace("-", "_") == norm:
-                    p = subdir / "processed"
-                    if p.exists():
-                        return p
-        return None
-
-    base_dir = _find_processed(dataset_slug)
-    if base_dir is None:
-        # List what we actually have for a better error message
-        available = []
-        if output_root.exists():
-            available = [d.name for d in output_root.iterdir() if d.is_dir() and (d / "processed").exists()]
-        detail = f"Processed dataset '{dataset_slug}' not found."
-        if available:
-            detail += f" Available slugs: {', '.join(available)}"
-        else:
-            detail += " No processed datasets exist yet — run a curation job first."
-        raise HTTPException(status_code=404, detail=detail)
-
-    zip_filename = f"{dataset_slug}_{format}.zip"
-    # Write to a temp file on disk (avoids loading the whole dataset into RAM)
-    tmp_zip_path = Path(tempfile.mktemp(suffix=".zip", dir=str(output_root)))
-    try:
-        if format == "yolo":
-            export_to_yolo_classification(base_dir, tmp_zip_path)
-        elif format == "coco":
-            export_to_coco_classification(base_dir, tmp_zip_path)
-        else:
-            # Raw ImageFolder ZIP, streamed to disk
-            with zipfile.ZipFile(tmp_zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for fp in sorted(base_dir.rglob("*")):
-                    if fp.is_file():
-                        zf.write(fp, arcname=str(fp.relative_to(base_dir)))
-    except Exception as exc:
-        tmp_zip_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"Export failed: {exc}")
-
-    if not tmp_zip_path.exists():
-        raise HTTPException(status_code=500, detail="Export failed — zip was not created.")
-
+@app.get("/api/dataset/download/{job_id}", tags=["dataset"])
+async def download_dataset(job_id: str):
+    base = Path("./cvagent_datasets") / job_id
+    zips = list(base.parent.glob(f"*_{job_id[:8]}.zip"))
+    if not zips:
+        raise HTTPException(status_code=404, detail="Dataset not ready yet")
     return FileResponse(
-        path=tmp_zip_path,
-        filename=zip_filename,
+        path=str(zips[0]),
+        filename=zips[0].name,
         media_type="application/zip",
-        background=BackgroundTask(lambda p=tmp_zip_path: p.unlink(missing_ok=True)),
     )
 
 @app.post("/api/dataset/reply/{job_id}", tags=["dataset"], dependencies=[Depends(get_current_user)])
@@ -1657,127 +1607,38 @@ active_agent_tasks: dict[UUID, asyncio.Task] = {}
 # ── WebSocket Pipeline ────────────────────────────────────────
 
 @app.websocket("/ws/pipeline/{job_id}")
-async def websocket_pipeline(
-    websocket: WebSocket, 
-    job_id: UUID,
-    token: str | None = Query(default=None),
-) -> None:
-    from backend.auth import get_ws_user
-    
-    # We must accept the connection first to send auth error if needed
+async def websocket_pipeline(websocket: WebSocket, job_id: str) -> None:
     await websocket.accept()
-    rid = str(job_id)
-    
-    # Auth is optional for public pipeline connections.
-    user = await get_ws_user(token)
-    if user is None:
-        logger.info("WS pipeline connection without auth for job %s", job_id)
-
-    job = jobs.get(job_id)
-    if job is None:
-        await websocket.send_json({
-            "type": MessageType.ERROR, 
-            "message": "Job not found.", 
-            "timestamp": datetime.utcnow().isoformat(), 
-            "id": str(uuid4())
-        })
-        await websocket.close(code=4004)
-        return
-
-    # Add to manager
-    await manager.connect(websocket, rid)
-
-    async def broadcast_emit(msg: PipelineMessage) -> None:
-        # Record log for catch-up — deque(maxlen=500) auto-evicts oldest at O(1)
-        history = job_logs.setdefault(job_id, deque(maxlen=500))
-        history.append(msg)
-        # Update job metadata if it's a "done" message
-        if msg.type == MessageType.DONE:
-            job["status"] = JobState.PENDING if msg.data.get("paused") else JobState.COMPLETED
-            job["result"] = msg.data
-            job["updated_at"] = datetime.utcnow()
-        # Broadcast to all clients in the room
-        await manager.broadcast(rid, msg.ws_dict())
-
     try:
-        # Catch up the new client with recent logs
-        for msg in job_logs.get(job_id, []):
-            await websocket.send_json(msg.ws_dict())
+        job = active_jobs.get(job_id)
+        if not job:
+            await websocket.send_json({"type": "error", "message": "Job not found"})
+            await websocket.close()
+            return
 
-        # Ensure agent exists and is using the broadcast callback
-        agent = agent_sessions.get(job_id)
-        if agent is None:
-            if nim_client is None:
-                await websocket.send_json(PipelineMessage(type=MessageType.ERROR, message="NIM not configured.").ws_dict())
-                await websocket.close(code=4003)
-                return
-            agent = DatasetAgent(nim_client=nim_client, job_id=job_id, emit=broadcast_emit)
-            agent_sessions[job_id] = agent
-        else:
-            agent.update_emit_callback(broadcast_emit)
+        queue = job.get("queue")
+        if queue is None:
+            await websocket.send_json({"type": "error", "message": "No queue for job"})
+            return
 
-        # Start/Resume agent run in background if not already running
-        if job_id not in active_agent_tasks or active_agent_tasks[job_id].done():
-            request_data = job["request"]
-            user_reply = job.pop("pending_reply", None)
-            
-            async def run_and_cleanup():
-                try:
-                    await agent.run(
-                        query=request_data["query"],
-                        source=request_data.get("source", "all"),
-                        target_size=request_data["target_size"],
-                        user_reply=user_reply,
-                    )
-                finally:
-                    active_agent_tasks.pop(job_id, None)
-                    if job["status"] == JobState.COMPLETED:
-                        agent_sessions.pop(job_id, None)
-
-            active_agent_tasks[job_id] = asyncio.create_task(run_and_cleanup())
-
-        # Keep connection alive and handle pings
         while True:
             try:
-                # Use a short timeout so we can check for job status updates (replies)
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
-                try:
-                    msg = json.loads(data)
-                    if msg.get("type") == "ping":
-                        await websocket.send_text("pong")
-                except json.JSONDecodeError:
-                    pass
+                msg = await asyncio.wait_for(queue.get(), timeout=300.0)
+                await websocket.send_json(msg)
+                if msg.get("type") in ("done", "error"):
+                    break
             except asyncio.TimeoutError:
-                # Periodic check for resumed state
-                if job.get("pending_reply") and (job_id not in active_agent_tasks or active_agent_tasks[job_id].done()):
-                    logger.info("[RESUME] Detected reply for job %s, restarting task.", job_id)
-                    request_data = job["request"]
-                    user_reply = job.pop("pending_reply", None)
-                    
-                    async def run_and_cleanup_resume():
-                        try:
-                            await agent.run(
-                                query=request_data["query"],
-                                source=request_data.get("source", "all"),
-                                target_size=request_data["target_size"],
-                                user_reply=user_reply,
-                            )
-                        finally:
-                            active_agent_tasks.pop(job_id, None)
-                            if job["status"] == JobState.COMPLETED:
-                                agent_sessions.pop(job_id, None)
-
-                    active_agent_tasks[job_id] = asyncio.create_task(run_and_cleanup_resume())
-                continue
-            except WebSocketDisconnect:
-                manager.disconnect(websocket, rid)
-                break
-
+                try:
+                    await websocket.send_json({"id": uuid4().hex, "type": "log", "message": "> still processing...", "data": {}, "timestamp": datetime.utcnow().isoformat()})
+                except Exception:
+                    break
     except WebSocketDisconnect:
-        manager.disconnect(websocket, rid)
-    except Exception as exc:
-        logger.exception("Pipeline WS error for job %s", job_id)
-        manager.disconnect(websocket, rid)
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 @app.websocket("/ws/train/{run_id}")

@@ -69,6 +69,28 @@ def bbox_to_yolo(x: int, y: int, w: int, h: int, img_w: int, img_h: int) -> tupl
     return round(cx, 6), round(cy, 6), round(nw, 6), round(nh, 6)
 
 
+def fallback_bbox(img: Image.Image) -> tuple[int, int, int, int]:
+    arr = np.array(img.convert("RGB"))
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    rect = (max(1, img.width // 20), max(1, img.height // 20), max(2, img.width - img.width // 10), max(2, img.height - img.height // 10))
+    try:
+        mask = np.zeros(gray.shape[:2], np.uint8)
+        bgd = np.zeros((1, 65), np.float64)
+        fgd = np.zeros((1, 65), np.float64)
+        cv2.grabCut(arr, mask, rect, bgd, fgd, 3, cv2.GC_INIT_WITH_RECT)
+        fg = np.where((mask == 1) | (mask == 3), 255, 0).astype("uint8")
+    except Exception:
+        _, fg = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    contours, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return (0, 0, img.width, img.height)
+    largest = max(contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest)
+    if w <= 1 or h <= 1:
+        return (0, 0, img.width, img.height)
+    return int(x), int(y), int(w), int(h)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -121,8 +143,15 @@ def main() -> None:
         clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         emit_event("log", "Loading SAM (facebook/sam-vit-base)…")
-        sam_model     = SamModel.from_pretrained("facebook/sam-vit-base").to(device)
-        sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
+        try:
+            sam_model     = SamModel.from_pretrained("facebook/sam-vit-base").to(device)
+            sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
+            sam_available = True
+        except Exception as sam_exc:
+            sam_model = None
+            sam_processor = None
+            sam_available = False
+            emit_event("log", f"SAM unavailable ({sam_exc}). Falling back to contour-based boxes.")
     except Exception as e:
         emit_event("error", f"Failed to load models: {e}")
         sys.exit(1)
@@ -260,23 +289,27 @@ def main() -> None:
                 continue
 
             # ── SAM segmentation → bounding box ──────────────────────────────
-            input_points = [[[img_w // 2, img_h // 2]]]   # centre-point prompt
-            sam_inputs   = sam_processor(raw_img, input_points=input_points, return_tensors="pt").to(device)
-            with torch.no_grad():
-                sam_out  = sam_model(**sam_inputs)
+            bbox_abs = None
+            if sam_available:
+                try:
+                    input_points = [[[img_w // 2, img_h // 2]]]   # centre-point prompt
+                    sam_inputs   = sam_processor(raw_img, input_points=input_points, return_tensors="pt").to(device)
+                    with torch.no_grad():
+                        sam_out  = sam_model(**sam_inputs)
 
-            masks = sam_processor.image_processor.post_process_masks(
-                sam_out.pred_masks.cpu(),
-                sam_inputs["original_sizes"].cpu(),
-                sam_inputs["reshaped_input_sizes"].cpu(),
-            )
-            # masks[0] shape: (1, num_masks, H, W) — take best mask (index 0)
-            best_mask = masks[0][0][0].numpy()   # (H, W) bool
+                    masks = sam_processor.image_processor.post_process_masks(
+                        sam_out.pred_masks.cpu(),
+                        sam_inputs["original_sizes"].cpu(),
+                        sam_inputs["reshaped_input_sizes"].cpu(),
+                    )
+                    best_mask = masks[0][0][0].numpy()
+                    bbox_abs = mask_to_tight_bbox(best_mask)
+                except Exception as sam_runtime_exc:
+                    emit_event("log", f"SAM failed on {img_path.name}: {sam_runtime_exc}. Using contour fallback.")
+                    bbox_abs = None
 
-            bbox_abs = mask_to_tight_bbox(best_mask)
             if bbox_abs is None:
-                # Fallback: full-image bbox
-                bbox_abs = (0, 0, img_w, img_h)
+                bbox_abs = fallback_bbox(raw_img)
 
             x_abs, y_abs, w_abs, h_abs = bbox_abs
             cx, cy, nw, nh = bbox_to_yolo(x_abs, y_abs, w_abs, h_abs, img_w, img_h)

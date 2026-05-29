@@ -1,0 +1,3565 @@
+{
+  "metadata": {
+    "tool": "CLIP zero-shot",
+    "model": "openai/clip-vit-base-patch32",
+    "class_names": [
+      "Brown spot",
+      "Frogeye",
+      "Healthy",
+      "Mosaic",
+      "Potato virus Y",
+      "Target spot",
+      "Weather fleck",
+      "alternaria alternata",
+      "cercospora nicotianae",
+      "no cercospora nicotianae or alternaria alternata present"
+    ],
+    "total_images": 500,
+    "timestamp": "2026-05-29T16:34:13.451880+00:00"
+  },
+  "annotations": [
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00000.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10341528803110123,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00001.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1024978756904602,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00002.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10325676947832108,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00003.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10281235724687576,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00004.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10269428044557571,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00005.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10350482165813446,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00006.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.1018875390291214,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00007.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10327256470918655,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00008.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10408954322338104,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00009.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10309509932994843,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00010.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10427745431661606,
+      "verified": false
+    },
+    {
+      "image_path": "test/alternaria alternata/alternaria alternata_00011.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1026892140507698,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00000.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10392247140407562,
+      "verified": true
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00001.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1055113673210144,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00002.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10408607125282288,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00003.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10530926287174225,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00004.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10383126139640808,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00005.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1061059981584549,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00006.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10596131533384323,
+      "verified": false
+    },
+    {
+      "image_path": "test/Brown spot/Brown spot_00007.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10452447086572647,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00000.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.103463314473629,
+      "verified": true
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00001.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10448738187551498,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00002.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10508576035499573,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00003.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10576805472373962,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00004.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10623139142990112,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00005.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10312613099813461,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00006.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10485495626926422,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00007.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.102652408182621,
+      "verified": false
+    },
+    {
+      "image_path": "test/cercospora nicotianae/cercospora nicotianae_00008.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10504918545484543,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00000.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10497540235519409,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00001.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10450683534145355,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00002.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10227330774068832,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00003.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10474275797605515,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00004.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10332220047712326,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00005.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1035468727350235,
+      "verified": false
+    },
+    {
+      "image_path": "test/Frogeye/Frogeye_00006.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10471779853105545,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00000.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10103463381528854,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00001.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10356921702623367,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00002.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10397446900606155,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00003.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10350527614355087,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00004.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10425058752298355,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00005.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10300276428461075,
+      "verified": false
+    },
+    {
+      "image_path": "test/Healthy/Healthy_00006.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10433744639158249,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00000.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1028326079249382,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00001.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.103723905980587,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00002.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.102140873670578,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00003.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10163094848394394,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00004.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10307048261165619,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00005.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10210603475570679,
+      "verified": false
+    },
+    {
+      "image_path": "test/Mosaic/Mosaic_00006.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10174623131752014,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00000.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10274266451597214,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00001.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.1035756841301918,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00002.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10232709348201752,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00003.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10186464339494705,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00004.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10188007354736328,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00005.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10167104005813599,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00006.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10397631675004959,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00007.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10266685485839844,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00008.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10183107107877731,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00009.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10345210134983063,
+      "verified": true
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00010.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10328240692615509,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00011.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10175305604934692,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00012.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10206970572471619,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00013.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Healthy",
+      "clip_confidence": 0.10103276371955872,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00014.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10378473252058029,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00015.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10316631197929382,
+      "verified": true
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00016.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10383173078298569,
+      "verified": false
+    },
+    {
+      "image_path": "test/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00017.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10183168202638626,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00000.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10187220573425293,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00001.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10557577013969421,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00002.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10316246747970581,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00003.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10324268788099289,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00004.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10396970063447952,
+      "verified": false
+    },
+    {
+      "image_path": "test/Potato virus Y/Potato virus Y_00005.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1044759526848793,
+      "verified": false
+    },
+    {
+      "image_path": "test/Target spot/Target spot_00000.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10481233894824982,
+      "verified": false
+    },
+    {
+      "image_path": "test/Target spot/Target spot_00001.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10543794184923172,
+      "verified": false
+    },
+    {
+      "image_path": "test/Target spot/Target spot_00002.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10427861660718918,
+      "verified": false
+    },
+    {
+      "image_path": "test/Target spot/Target spot_00003.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10276429355144501,
+      "verified": false
+    },
+    {
+      "image_path": "test/Target spot/Target spot_00004.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10469384491443634,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00000.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10482118278741837,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00001.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10231393575668335,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00002.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10426555573940277,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00003.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10507473349571228,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00004.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1019832044839859,
+      "verified": false
+    },
+    {
+      "image_path": "test/Weather fleck/Weather fleck_00005.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10236194729804993,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00000.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10372129082679749,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00001.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10331734269857407,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00002.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10434332489967346,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00003.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10321076959371567,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00004.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1034030020236969,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00005.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10555581003427505,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00006.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10450716316699982,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00007.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.103485107421875,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00008.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10117104649543762,
+      "verified": true
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00009.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10351460427045822,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00010.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10218098759651184,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00011.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10398812592029572,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00012.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10148797929286957,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00013.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10514635592699051,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00014.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10508120059967041,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00015.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10371225327253342,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00016.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10238476097583771,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00017.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10390647500753403,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00018.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10308073461055756,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00019.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10205131024122238,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00020.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10191425681114197,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00021.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10466655343770981,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00022.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10360921919345856,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00023.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10297422856092453,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00024.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10241497308015823,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00025.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10313112288713455,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00026.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10361437499523163,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00027.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10457830131053925,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00028.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10472118854522705,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00029.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10386642068624496,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00030.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10302554816007614,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00031.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1038791611790657,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00032.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10481024533510208,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00033.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10350401699542999,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00034.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10372137278318405,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00035.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10215498507022858,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00036.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10366357862949371,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00037.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10297484695911407,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00038.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10322742909193039,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00039.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10396747291088104,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00040.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10406126827001572,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00041.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10262631624937057,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00042.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10448984801769257,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00043.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10247686505317688,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00044.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10337463766336441,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00045.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10392071306705475,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00046.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10386171191930771,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00047.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10504858940839767,
+      "verified": false
+    },
+    {
+      "image_path": "train/alternaria alternata/alternaria alternata_00048.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10367358475923538,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00000.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1015746146440506,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00001.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10140551626682281,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00002.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10163663327693939,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00003.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1054455116391182,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00004.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10538414865732193,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00005.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10362762957811356,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00006.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10177012532949448,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00007.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10515601187944412,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00008.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10343629121780396,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00009.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10416720062494278,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00010.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10438936203718185,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00011.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10545521229505539,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00012.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10343048721551895,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00013.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10406676679849625,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00014.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10430659353733063,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00015.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10268722474575043,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00016.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10557889193296432,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00017.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10303046554327011,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00018.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10252433270215988,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00019.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10515257716178894,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00020.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10533977299928665,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00021.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10311636328697205,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00022.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1038036197423935,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00023.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10559668391942978,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00024.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10242180526256561,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00025.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10424146056175232,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00026.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10413194447755814,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00027.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10228025913238525,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00028.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10501329600811005,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00029.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10386968404054642,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00030.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10489466041326523,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00031.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10323364287614822,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00032.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10261289030313492,
+      "verified": true
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00033.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10285399109125137,
+      "verified": false
+    },
+    {
+      "image_path": "train/Brown spot/Brown spot_00034.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10282313823699951,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00000.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10304419696331024,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00001.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10251747816801071,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00002.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10286486148834229,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00003.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10738012939691544,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00004.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10278938710689545,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00005.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10720086097717285,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00006.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1047813817858696,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00007.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10541598498821259,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00008.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1045808494091034,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00009.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1023419052362442,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00010.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.103249192237854,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00011.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10494809597730637,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00012.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10392291843891144,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00013.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10438259690999985,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00014.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10270333290100098,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00015.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10285332053899765,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00016.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10680027306079865,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00017.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10367611795663834,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00018.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1038437932729721,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00019.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10295668244361877,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00020.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10286771506071091,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00021.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10473829507827759,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00022.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10388631373643875,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00023.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10456512868404388,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00024.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10421782732009888,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00025.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10356908291578293,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00026.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10630270093679428,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00027.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10476859658956528,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00028.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1045016348361969,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00029.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10289808362722397,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00030.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10203926265239716,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00031.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10391201823949814,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00032.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1041090115904808,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00033.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10284849256277084,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00034.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10391275584697723,
+      "verified": true
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00035.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10332397371530533,
+      "verified": false
+    },
+    {
+      "image_path": "train/cercospora nicotianae/cercospora nicotianae_00036.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10500022023916245,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00000.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10484135150909424,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00001.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10346805304288864,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00002.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10305654257535934,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00003.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10260408371686935,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00004.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10280207544565201,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00005.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10295703262090683,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00006.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10525577515363693,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00007.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10389647632837296,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00008.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10356688499450684,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00009.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10402277857065201,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00010.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10316627472639084,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00011.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10476197302341461,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00012.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10555161535739899,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00013.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10298257321119308,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00014.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10355688631534576,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00015.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10381833463907242,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00016.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1049082800745964,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00017.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10403677076101303,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00018.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10499873757362366,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00019.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10322137922048569,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00020.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10403438657522202,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00021.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10416390746831894,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00022.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10398402810096741,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00023.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10483009368181229,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00024.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10501658171415329,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00025.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10531136393547058,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00026.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10332663357257843,
+      "verified": false
+    },
+    {
+      "image_path": "train/Frogeye/Frogeye_00027.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10367070883512497,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00000.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10141677409410477,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00001.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10302232205867767,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00002.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1030128076672554,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00003.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10266251116991043,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00004.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10291289538145065,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00005.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10321396589279175,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00006.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10392539948225021,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00007.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10325130820274353,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00008.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10368696600198746,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00009.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10244479030370712,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00010.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10392285883426666,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00011.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10511451214551926,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00012.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1020304411649704,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00013.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1045805960893631,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00014.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10452239960432053,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00015.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10497631877660751,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00016.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10314611345529556,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00017.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10296612977981567,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00018.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10275167226791382,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00019.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10233242809772491,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00020.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1034681499004364,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00021.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10335863381624222,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00022.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10463261604309082,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00023.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10387313365936279,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00024.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10385826230049133,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00025.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10473804175853729,
+      "verified": false
+    },
+    {
+      "image_path": "train/Healthy/Healthy_00026.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10276853293180466,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00000.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10485726594924927,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00001.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10377870500087738,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00002.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10404681414365768,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00003.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10311885178089142,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00004.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10535600781440735,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00005.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10461714118719101,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00006.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10381469130516052,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00007.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10229943692684174,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00008.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10332924872636795,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00009.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10264406353235245,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00010.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10417605936527252,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00011.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10401536524295807,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00012.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10133761912584305,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00013.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.1026049479842186,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00014.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10143566131591797,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00015.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10320798307657242,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00016.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10376930981874466,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00017.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10243910551071167,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00018.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10227704048156738,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00019.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10489815473556519,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00020.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10202686488628387,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00021.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1028217077255249,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00022.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1026386022567749,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00023.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.1017729714512825,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00024.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10096663236618042,
+      "verified": true
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00025.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10373535007238388,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00026.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10203742980957031,
+      "verified": false
+    },
+    {
+      "image_path": "train/Mosaic/Mosaic_00027.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10333878546953201,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00000.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10217533260583878,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00001.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10269846767187119,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00002.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10295632481575012,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00003.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10396591573953629,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00004.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10281380265951157,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00005.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10195338726043701,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00006.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10133775323629379,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00007.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10393509268760681,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00008.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10170344263315201,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00009.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10121440142393112,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00010.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10102839767932892,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00011.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10200884193181992,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00012.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10341659188270569,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00013.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10180948674678802,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00014.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10180755704641342,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00015.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1018851101398468,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00016.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10378275066614151,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00017.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1039588525891304,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00018.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10256677865982056,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00019.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10161375999450684,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00020.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10112536698579788,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00021.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1041916161775589,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00022.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10400410741567612,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00023.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10350485146045685,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00024.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10224354267120361,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00025.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1032823696732521,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00026.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10202719271183014,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00027.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10315457731485367,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00028.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10225172340869904,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00029.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.102475605905056,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00030.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10233404487371445,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00031.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10273963212966919,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00032.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10269013047218323,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00033.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10274055600166321,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00034.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1026565432548523,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00035.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10388607531785965,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00036.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10218367725610733,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00037.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10252885520458221,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00038.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10356935113668442,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00039.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10313869267702103,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00040.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1020800918340683,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00041.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10223343223333359,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00042.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10269252210855484,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00043.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Healthy",
+      "clip_confidence": 0.10302868485450745,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00044.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1013684868812561,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00045.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10277598351240158,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00046.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10242881625890732,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00047.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10235660523176193,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00048.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10368749499320984,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00049.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10281980037689209,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00050.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10230147838592529,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00051.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10225793719291687,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00052.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10242032259702682,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00053.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10650476813316345,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00054.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10213623195886612,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00055.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10282593220472336,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00056.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10276477783918381,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00057.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10392960160970688,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00058.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10207100212574005,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00059.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10289599001407623,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00060.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10515797138214111,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00061.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10175023972988129,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00062.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10152119398117065,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00063.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Frogeye",
+      "clip_confidence": 0.10156726092100143,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00064.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10359645634889603,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00065.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10271725803613663,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00066.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1019553691148758,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00067.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10359606146812439,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00068.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10180383920669556,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00069.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10173668712377548,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00070.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10303623229265213,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00071.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1017962396144867,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00072.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10198457539081573,
+      "verified": true
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00073.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10262060165405273,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00074.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10213242471218109,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00075.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10169975459575653,
+      "verified": false
+    },
+    {
+      "image_path": "train/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00076.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10178939998149872,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00000.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10427547246217728,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00001.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10545242577791214,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00002.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10273919999599457,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00003.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.102232426404953,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00004.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10386763513088226,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00005.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1046990230679512,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00006.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10595065355300903,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00007.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1029801070690155,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00008.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10385128110647202,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00009.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10342538356781006,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00010.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10205670446157455,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00011.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10317890346050262,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00012.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10601331293582916,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00013.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10487057268619537,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00014.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1057111844420433,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00015.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10498141497373581,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00016.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10387492924928665,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00017.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10471703112125397,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00018.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1051839143037796,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00019.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10318861901760101,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00020.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10414286702871323,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00021.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10538052767515182,
+      "verified": false
+    },
+    {
+      "image_path": "train/Potato virus Y/Potato virus Y_00022.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10504721105098724,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00000.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10333980619907379,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00001.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10614797472953796,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00002.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10494478791952133,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00003.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1057431548833847,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00004.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10248014330863953,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00005.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10317818820476532,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00006.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10490068048238754,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00007.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10432546585798264,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00008.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10475094616413116,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00009.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10418441146612167,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00010.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10514123737812042,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00011.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10170213133096695,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00012.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10366649925708771,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00013.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10535836964845657,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00014.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10423212498426437,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00015.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10485856235027313,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00016.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1051803007721901,
+      "verified": false
+    },
+    {
+      "image_path": "train/Target spot/Target spot_00017.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10533227026462555,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00000.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10470658540725708,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00001.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10614839941263199,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00002.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1057613417506218,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00003.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10622060298919678,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00004.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10330799967050552,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00005.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10544542968273163,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00006.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10291531682014465,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00007.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10547571629285812,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00008.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10397792607545853,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00009.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10546792298555374,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00010.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.105833500623703,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00011.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10554348677396774,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00012.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10479184240102768,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00013.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10273539274930954,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00014.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.1038389578461647,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00015.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10575643181800842,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00016.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10278378427028656,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00017.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10463806241750717,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00018.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10338392108678818,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00019.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10171705484390259,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00020.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10237335413694382,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00021.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10596100240945816,
+      "verified": false
+    },
+    {
+      "image_path": "train/Weather fleck/Weather fleck_00022.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10210783779621124,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00000.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10522181540727615,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00001.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1043338030576706,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00002.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10312937945127487,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00003.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10320450365543365,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00004.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10361632704734802,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00005.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10441521555185318,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00006.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10292089730501175,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00007.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10446663200855255,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00008.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10386070609092712,
+      "verified": false
+    },
+    {
+      "image_path": "val/alternaria alternata/alternaria alternata_00009.jpg",
+      "original_label": "alternaria alternata",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10446992516517639,
+      "verified": false
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00000.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10532882809638977,
+      "verified": false
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00001.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10256761312484741,
+      "verified": true
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00002.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10298313945531845,
+      "verified": true
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00003.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10238144546747208,
+      "verified": true
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00004.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1044224202632904,
+      "verified": false
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00005.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10578709840774536,
+      "verified": false
+    },
+    {
+      "image_path": "val/Brown spot/Brown spot_00006.jpg",
+      "original_label": "Brown spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10262905806303024,
+      "verified": false
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00000.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10395913571119308,
+      "verified": true
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00001.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10359105467796326,
+      "verified": false
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00002.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1067742258310318,
+      "verified": false
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00003.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10473513603210449,
+      "verified": true
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00004.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10608736425638199,
+      "verified": true
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00005.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10394798219203949,
+      "verified": true
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00006.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10411925613880157,
+      "verified": true
+    },
+    {
+      "image_path": "val/cercospora nicotianae/cercospora nicotianae_00007.jpg",
+      "original_label": "cercospora nicotianae",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10501397401094437,
+      "verified": true
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00000.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10539446771144867,
+      "verified": false
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00001.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10424243658781052,
+      "verified": false
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00002.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1027686595916748,
+      "verified": false
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00003.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10404780507087708,
+      "verified": false
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00004.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10335396230220795,
+      "verified": false
+    },
+    {
+      "image_path": "val/Frogeye/Frogeye_00005.jpg",
+      "original_label": "Frogeye",
+      "clip_predicted_class": "Target spot",
+      "clip_confidence": 0.10449307411909103,
+      "verified": false
+    },
+    {
+      "image_path": "val/Healthy/Healthy_00000.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10415317863225937,
+      "verified": false
+    },
+    {
+      "image_path": "val/Healthy/Healthy_00001.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10373853147029877,
+      "verified": false
+    },
+    {
+      "image_path": "val/Healthy/Healthy_00002.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10517361760139465,
+      "verified": false
+    },
+    {
+      "image_path": "val/Healthy/Healthy_00003.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10289960354566574,
+      "verified": false
+    },
+    {
+      "image_path": "val/Healthy/Healthy_00004.jpg",
+      "original_label": "Healthy",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.1042160764336586,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00000.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10207144916057587,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00001.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10418348014354706,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00002.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10326658934354782,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00003.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10300192981958389,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00004.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10411375015974045,
+      "verified": false
+    },
+    {
+      "image_path": "val/Mosaic/Mosaic_00005.jpg",
+      "original_label": "Mosaic",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10338565707206726,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00000.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10442463308572769,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00001.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10294950008392334,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00002.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Frogeye",
+      "clip_confidence": 0.10224063694477081,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00003.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10209139436483383,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00004.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10285057127475739,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00005.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10175721347332001,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00006.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10527930408716202,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00007.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10179103165864944,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00008.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.1038082018494606,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00009.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Frogeye",
+      "clip_confidence": 0.10264258086681366,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00010.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10102707147598267,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00011.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10261976718902588,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00012.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10195807367563248,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00013.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.1035049557685852,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00014.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "Potato virus Y",
+      "clip_confidence": 0.10180513560771942,
+      "verified": false
+    },
+    {
+      "image_path": "val/no cercospora nicotianae or alternaria alternata present/no cercospora nicotianae or alternaria alternata present_00015.jpg",
+      "original_label": "no cercospora nicotianae or alternaria alternata present",
+      "clip_predicted_class": "alternaria alternata",
+      "clip_confidence": 0.10352544486522675,
+      "verified": false
+    },
+    {
+      "image_path": "val/Potato virus Y/Potato virus Y_00000.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10324986279010773,
+      "verified": false
+    },
+    {
+      "image_path": "val/Potato virus Y/Potato virus Y_00001.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Mosaic",
+      "clip_confidence": 0.10411946475505829,
+      "verified": false
+    },
+    {
+      "image_path": "val/Potato virus Y/Potato virus Y_00002.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10600580275058746,
+      "verified": false
+    },
+    {
+      "image_path": "val/Potato virus Y/Potato virus Y_00003.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10310914367437363,
+      "verified": false
+    },
+    {
+      "image_path": "val/Potato virus Y/Potato virus Y_00004.jpg",
+      "original_label": "Potato virus Y",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10458057373762131,
+      "verified": false
+    },
+    {
+      "image_path": "val/Target spot/Target spot_00000.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10357674211263657,
+      "verified": false
+    },
+    {
+      "image_path": "val/Target spot/Target spot_00001.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10235563665628433,
+      "verified": false
+    },
+    {
+      "image_path": "val/Target spot/Target spot_00002.jpg",
+      "original_label": "Target spot",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10563521087169647,
+      "verified": false
+    },
+    {
+      "image_path": "val/Weather fleck/Weather fleck_00000.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10477729886770248,
+      "verified": false
+    },
+    {
+      "image_path": "val/Weather fleck/Weather fleck_00001.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "no cercospora nicotianae or alternaria alternata present",
+      "clip_confidence": 0.10618097335100174,
+      "verified": false
+    },
+    {
+      "image_path": "val/Weather fleck/Weather fleck_00002.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "cercospora nicotianae",
+      "clip_confidence": 0.10557871311903,
+      "verified": false
+    },
+    {
+      "image_path": "val/Weather fleck/Weather fleck_00003.jpg",
+      "original_label": "Weather fleck",
+      "clip_predicted_class": "Brown spot",
+      "clip_confidence": 0.10336807370185852,
+      "verified": false
+    }
+  ],
+  "summary": {
+    "verified_count": 48,
+    "verification_rate": 0.096,
+    "low_confidence_count": 500,
+    "class_breakdown": {
+      "Brown spot": {
+        "count": 143,
+        "avg_confidence": 0.10335092694609316
+      },
+      "Mosaic": {
+        "count": 34,
+        "avg_confidence": 0.10333558478776146
+      },
+      "no cercospora nicotianae or alternaria alternata present": {
+        "count": 72,
+        "avg_confidence": 0.1031924510995547
+      },
+      "cercospora nicotianae": {
+        "count": 119,
+        "avg_confidence": 0.10445721171984151
+      },
+      "alternaria alternata": {
+        "count": 99,
+        "avg_confidence": 0.10357277283463816
+      },
+      "Potato virus Y": {
+        "count": 27,
+        "avg_confidence": 0.10247258234907079
+      },
+      "Healthy": {
+        "count": 2,
+        "avg_confidence": 0.10203072428703308
+      },
+      "Frogeye": {
+        "count": 3,
+        "avg_confidence": 0.10215015957752864
+      },
+      "Target spot": {
+        "count": 1,
+        "avg_confidence": 0.10449307411909103
+      }
+    }
+  }
+}

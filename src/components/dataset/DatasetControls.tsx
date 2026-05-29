@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Search, ChevronDown, Play, RotateCcw, ExternalLink, CheckCircle, ChevronRight, Upload } from 'lucide-react';
+import { Search, ChevronDown, Play, RotateCcw, ExternalLink, CheckCircle, ChevronRight, Upload, Download } from 'lucide-react';
 import { useAppStore, type PipelineQuestion, type DatasetOption, type PreprocessingReport, type ProcessingPlan } from '../../store/useAppStore';
 import {
   startDatasetPipeline,
@@ -205,6 +205,7 @@ export default function DatasetControls() {
 
   const wsRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const focusInput = () => inputRef.current?.focus();
@@ -262,10 +263,11 @@ export default function DatasetControls() {
       if (!stageSamples[stage as keyof typeof stageSamples]) {
         (stageSamples as any)[stage] = [];
       }
+      const bucket = ((stageSamples as any)[stage] ?? []) as any[];
       
       // Avoid duplicates
-      if (!stageSamples[stage as keyof typeof stageSamples].some((s: any) => s.id === sample.id)) {
-        stageSamples[stage as keyof typeof stageSamples] = [...stageSamples[stage as keyof typeof stageSamples], sample].slice(-8);
+      if (!bucket.some((s: any) => s.id === sample.id)) {
+        (stageSamples as any)[stage] = [...bucket, sample].slice(-48);
         setPreprocessingReport({ ...currentReport, stage_samples: stageSamples });
       }
       return;
@@ -320,6 +322,9 @@ export default function DatasetControls() {
 
     if (msg.type === 'done') {
       const data = msg.data as Record<string, unknown>;
+      if (typeof data?.download_url === 'string') {
+        setDownloadUrl(`http://localhost:8000${data.download_url}`);
+      }
       if (data?.paused) {
         const pauseType = data.type as string;
         let question = null;
@@ -443,6 +448,7 @@ export default function DatasetControls() {
     if (!datasetQuery.trim()) return;
 
     startProcessing();
+    setDownloadUrl(null);
     setBlurData([]);
     setImagesIngested(null);
     setQualityScore(null);
@@ -511,6 +517,7 @@ export default function DatasetControls() {
   const handleReset = () => {
     wsRef.current?.close();
     wsRef.current = null;
+    setDownloadUrl(null);
     clearTerminalLogs();
     setJobId(null);
     setDatasetResults([]);
@@ -719,6 +726,17 @@ export default function DatasetControls() {
             Agent is waiting for your input. See the terminal above.
           </p>
         </div>
+      )}
+
+      {downloadUrl && (
+        <a
+          href={downloadUrl}
+          download
+          className="mt-4 flex items-center gap-2 w-full justify-center bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 font-medium py-2.5 px-4 rounded-xl transition-colors text-sm"
+        >
+          <Download className="w-4 h-4" />
+          Download Annotated Dataset (.zip)
+        </a>
       )}
     </div>
   );
