@@ -29,6 +29,7 @@ import os
 import platform
 import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -83,9 +84,32 @@ NODE_MODULES = ROOT / "node_modules"
 RUNS_DIR     = ROOT / "runs"
 OUTPUT_DIR   = ROOT / "cvagent_output"
 
-BACKEND_URL  = "http://127.0.0.1:8000"
-FRONTEND_URL = "http://127.0.0.1:5173"
+BACKEND_BIND_HOST = "127.0.0.1"
+BACKEND_HOST = "127.0.0.1"
+BACKEND_PORT = 8000
+BACKEND_URL  = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
+FRONTEND_BIND_HOST = "127.0.0.1"
+FRONTEND_HOST = "127.0.0.1"
+FRONTEND_PORT = 5173
+FRONTEND_URL = f"http://{FRONTEND_HOST}:{FRONTEND_PORT}"
 HEALTH_URL   = f"{BACKEND_URL}/api/health"
+
+
+def _set_backend_bind(host: str, port: int) -> None:
+    global BACKEND_BIND_HOST, BACKEND_HOST, BACKEND_PORT, BACKEND_URL, HEALTH_URL
+    BACKEND_BIND_HOST = host
+    BACKEND_HOST = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    BACKEND_PORT = port
+    BACKEND_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
+    HEALTH_URL = f"{BACKEND_URL}/api/health"
+
+
+def _set_frontend_bind(host: str, port: int) -> None:
+    global FRONTEND_BIND_HOST, FRONTEND_HOST, FRONTEND_PORT, FRONTEND_URL
+    FRONTEND_BIND_HOST = host
+    FRONTEND_HOST = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    FRONTEND_PORT = port
+    FRONTEND_URL = f"http://{FRONTEND_HOST}:{FRONTEND_PORT}"
 
 # Required Python packages: (import_name, pip_name)
 REQUIRED_PACKAGES = [
@@ -149,6 +173,25 @@ def _wait_http(url: str, timeout: float, proc: subprocess.Popen | None = None) -
     return False
 
 
+def _port_available(host: str, port: int) -> bool:
+    bind_host = "::" if host == "::" else host
+    family = socket.AF_INET6 if bind_host == "::" else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as s:
+            s.bind((bind_host, port))
+        return True
+    except OSError:
+        return False
+
+
+def _find_available_port(host: str, preferred_port: int, span: int = 50) -> int:
+    for port in range(preferred_port, preferred_port + span + 1):
+        if _port_available(host, port):
+            return port
+    _fail(f"No free port found from {preferred_port} to {preferred_port + span}.")
+    raise RuntimeError("unreachable")
+
+
 # ── Step 1 — Python & system checks ──────────────────────────────────────────
 
 def check_python() -> None:
@@ -183,6 +226,8 @@ def check_env() -> None:
                 "HF_TOKEN=\n"
                 "HOST=0.0.0.0\n"
                 "PORT=8000\n"
+                "FRONTEND_HOST=127.0.0.1\n"
+                "FRONTEND_PORT=5173\n"
                 "LOG_LEVEL=info\n"
             )
             _warn("Created blank backend/.env")
@@ -226,6 +271,24 @@ def check_env() -> None:
         _ok("HF_TOKEN set (gated datasets enabled)")
     else:
         _info("HF_TOKEN not set — only public HuggingFace datasets available")
+
+    backend_host = env_vars.get("HOST", "127.0.0.1") or "127.0.0.1"
+    port_text = env_vars.get("PORT", "8000")
+    try:
+        backend_port = int(port_text)
+    except ValueError:
+        backend_port = 8000
+        _warn(f"Invalid PORT in backend/.env: {port_text!r} — using 8000")
+    _set_backend_bind(backend_host, backend_port)
+
+    frontend_host = env_vars.get("FRONTEND_HOST", "127.0.0.1") or "127.0.0.1"
+    frontend_port_text = env_vars.get("FRONTEND_PORT", "5173")
+    try:
+        frontend_port = int(frontend_port_text)
+    except ValueError:
+        frontend_port = 5173
+        _warn(f"Invalid FRONTEND_PORT in backend/.env: {frontend_port_text!r} — using 5173")
+    _set_frontend_bind(frontend_host, frontend_port)
 
 
 # ── Step 3 — Python packages ──────────────────────────────────────────────────
@@ -316,14 +379,28 @@ def start_backend() -> subprocess.Popen:
             continue
         k, _, v = line.partition("=")
         env[k.strip()] = v.strip()
+    env["HOST"] = BACKEND_BIND_HOST
+    env["PORT"] = str(BACKEND_PORT)
+
+    host = env.get("HOST", BACKEND_BIND_HOST)
+    try:
+        preferred_port = int(env.get("PORT", str(BACKEND_PORT)))
+    except ValueError:
+        preferred_port = BACKEND_PORT
+    port = _find_available_port(host, preferred_port)
+    if port != preferred_port:
+        _warn(f"Backend port {preferred_port} is already in use; using {port} instead")
+    _set_backend_bind(host, port)
+    env["HOST"] = BACKEND_BIND_HOST
+    env["PORT"] = str(BACKEND_PORT)
 
     proc = subprocess.Popen(
         [
-                    sys.executable, "-m", "uvicorn",
-                    "backend.main:app",
-                    "--loop", "asyncio",
-            "--host", "127.0.0.1",
-            "--port", "8000",
+            sys.executable, "-m", "uvicorn",
+            "backend.main:app",
+            "--loop", "asyncio",
+            "--host", BACKEND_BIND_HOST,
+            "--port", str(BACKEND_PORT),
             "--log-level", "warning",   # quieter — errors still show
         ],
         cwd=str(ROOT),
@@ -331,20 +408,31 @@ def start_backend() -> subprocess.Popen:
     )
 
     _info(f"Waiting for backend to be healthy (PID {proc.pid})…")
-    if not _wait_http(HEALTH_URL, timeout=30, proc=proc):
+    if not _wait_http(HEALTH_URL, timeout=60, proc=proc):
+        port = str(BACKEND_PORT)
+        host = BACKEND_BIND_HOST
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
         if proc.poll() is not None:
             _fail(
                 "Backend process died during startup.\n"
                 "Common causes:\n"
                 "  • Missing Python package (re-run this script)\n"
                 "  • Syntax error in backend code\n"
-                "  • Port 8000 already in use\n"
+                f"  • Port {port} already in use\n"
                 "Run manually to see the full traceback:\n"
-                f"  python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+                f"  python -m uvicorn backend.main:app --host {host} --port {port}"
             )
         _fail(
-            "Backend didn't respond within 30 seconds.\n"
-            "Check if port 8000 is blocked or another process is using it."
+            "Backend didn't respond within 60 seconds.\n"
+            f"Check if port {port} is blocked or another process is using it."
         )
 
     # Read the health response to show NIM status
@@ -374,10 +462,47 @@ def start_backend() -> subprocess.Popen:
 def start_frontend() -> subprocess.Popen:
     _section("Step 7 · Frontend (Vite)")
 
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    env["PYTHONUNBUFFERED"] = "1"
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        env[k.strip()] = v.strip()
+
+    frontend_host = env.get("FRONTEND_HOST", FRONTEND_BIND_HOST)
+    try:
+        preferred_frontend_port = int(env.get("FRONTEND_PORT", str(FRONTEND_PORT)))
+    except ValueError:
+        preferred_frontend_port = FRONTEND_PORT
+    frontend_port = _find_available_port(frontend_host, preferred_frontend_port)
+    if frontend_port != preferred_frontend_port:
+        _warn(f"Frontend port {preferred_frontend_port} is already in use; using {frontend_port} instead")
+    _set_frontend_bind(frontend_host, frontend_port)
+    env["FRONTEND_HOST"] = FRONTEND_BIND_HOST
+    env["FRONTEND_PORT"] = str(FRONTEND_PORT)
+
+    # Expose backend/frontend URLs to Vite so the app can resolve API and data routes correctly.
+    env["VITE_API_BASE_URL"] = BACKEND_URL
+    env["VITE_FRONTEND_URL"] = FRONTEND_URL
+
     npm = "npm.cmd" if IS_WIN and shutil.which("npm.cmd") else "npm"
     proc = subprocess.Popen(
-        [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", "5173"],
+        [
+            npm,
+            "run",
+            "dev",
+            "--",
+            "--host",
+            FRONTEND_BIND_HOST,
+            "--port",
+            str(FRONTEND_PORT),
+            "--strictPort",
+        ],
         cwd=str(ROOT),
+        env=env,
     )
 
     _info(f"Waiting for Vite dev server (PID {proc.pid})…")
@@ -405,10 +530,10 @@ def print_ready(nim_connected: bool) -> None:
 {C('║')}  {G('VisCurator is running!')}                              {C('║')}
 {C('╠══════════════════════════════════════════════════════╣')}
 {C('║')}                                                      {C('║')}
-{C('║')}   {B('App')}        →  {C('http://localhost:5173')}             {C('║')}
-{C('║')}   {B('API')}        →  {C('http://localhost:8000')}             {C('║')}
-{C('║')}   {B('API docs')}   →  {C('http://localhost:8000/docs')}        {C('║')}
-{C('║')}   {B('Health')}     →  {C('http://localhost:8000/api/health')}  {C('║')}
+{C('║')}   {B('App')}        →  {C(f'{FRONTEND_URL}')}             {C('║')}
+{C('║')}   {B('API')}        →  {C(f'{BACKEND_URL}')}             {C('║')}
+{C('║')}   {B('API docs')}   →  {C(f'{BACKEND_URL}/docs')}        {C('║')}
+{C('║')}   {B('Health')}     →  {C(f'{BACKEND_URL}/api/health')}  {C('║')}
 {C('║')}                                                      {C('║')}
 {C('║')}   {B('Login')}      →  admin / viscurator                {C('║')}
 {C('║')}   {B('NIM')}        →  {"" + G("connected") + "   CVAgent ready           " if nim_connected else Y("not connected") + "  Set NVIDIA_API_KEY      "}{C('║')}
@@ -477,8 +602,8 @@ def watch(backend: subprocess.Popen, frontend: subprocess.Popen) -> None:
                     sys.executable, "-m", "uvicorn",
                     "backend.main:app",
                     "--loop", "asyncio",
-                    "--host", "127.0.0.1",
-                    "--port", "8000",
+                    "--host", BACKEND_BIND_HOST,
+                    "--port", str(BACKEND_PORT),
                     "--log-level", "warning",
                 ],
                 cwd=str(ROOT),

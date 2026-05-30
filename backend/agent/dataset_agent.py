@@ -47,44 +47,65 @@ class DatasetAgent:
             datasets = search_result["datasets"]
             await self.emit("tool_result", f"Found {len(datasets)} datasets", {"datasets": datasets})
 
-            await self.emit("thought", "Analyzing results to find the best match...")
-            best = await self._pick_best_dataset(query, datasets)
-            await self.emit("tool_result", f"Selected dataset: {best['dataset_id']}", {"selected": best})
+            await self.emit("thought", "Analyzing results to find a loadable image dataset...")
+            preferred = await self._pick_best_dataset(query, datasets)
+            candidates = self._candidate_order(preferred, datasets)
 
-            await self.emit("thought", f"Inspecting {best['dataset_id']} to understand its structure...")
-            info = await inspect_dataset(best["dataset_id"])
-            if info.get("status") == "error":
-                await self.emit("error", f"Could not inspect dataset: {info.get('error')}")
-                return
-
-            image_col = info.get("image_column", "image")
-            label_col = info.get("label_column", "label")
-            class_names = info.get("class_names") or []
-
-            await self.emit(
-                "log",
-                f"Dataset structure: image_column='{image_col}', label_column='{label_col}', classes={len(class_names)}",
-            )
-
-            await self.emit("thought", f"Downloading up to {target_size} images...")
+            best: dict[str, Any] | None = None
+            info: dict[str, Any] = {}
+            clean_result: dict[str, Any] = {}
+            last_error = ""
 
             async def stream_download(msg: str):
                 await self.emit("log", msg)
 
-            clean_result = await download_and_clean(
-                dataset_id=best["dataset_id"],
-                image_column=image_col,
-                label_column=label_col,
-                output_dir=str(output_dir / "images"),
-                max_images=target_size,
-                emit_callback=stream_download,
-            )
+            for index, candidate in enumerate(candidates[:5], start=1):
+                dataset_id = candidate["dataset_id"]
+                await self.emit("thought", f"Trying candidate {index}/{min(len(candidates), 5)}: {dataset_id}")
 
-            if clean_result.get("status") == "error":
-                await self.emit("error", f"Download failed: {clean_result.get('error')}")
+                info = await inspect_dataset(dataset_id)
+                if info.get("status") == "error" or not info.get("image_column") or not info.get("label_column"):
+                    last_error = str(info.get("error") or "missing image/label columns")
+                    await self.emit("log", f"Skipping {dataset_id}: {last_error}")
+                    continue
+
+                image_col = info.get("image_column", "image")
+                label_col = info.get("label_column", "label")
+                class_names = info.get("class_names") or []
+
+                await self.emit(
+                    "log",
+                    f"Dataset structure: image_column='{image_col}', label_column='{label_col}', classes={len(class_names)}",
+                )
+
+                await self.emit("thought", f"Downloading up to {target_size} images from {dataset_id}...")
+                clean_result = await download_and_clean(
+                    dataset_id=dataset_id,
+                    image_column=image_col,
+                    label_column=label_col,
+                    output_dir=str(output_dir / "images"),
+                    max_images=target_size,
+                    emit_callback=stream_download,
+                )
+
+                if clean_result.get("status") == "error":
+                    last_error = str(clean_result.get("error", "download failed"))
+                    await self.emit("log", f"Skipping {dataset_id}: {last_error}")
+                    continue
+
+                best = candidate
+                await self.emit("tool_result", f"Selected dataset: {best['dataset_id']}", {"selected": best})
+                await self.emit("tool_result", f"Downloaded {clean_result['total_downloaded']} images", clean_result)
+                break
+
+            if best is None:
+                await self.emit(
+                    "error",
+                    f"No loadable image classification dataset completed for '{query}'. Last error: {last_error or 'unknown'}",
+                )
                 return
 
-            await self.emit("tool_result", f"Downloaded {clean_result['total_downloaded']} images", clean_result)
+            class_names = info.get("class_names") or []
 
             if not class_names:
                 class_names = list(clean_result.get("class_distribution", {}).keys())
@@ -117,9 +138,18 @@ class DatasetAgent:
             await self.emit("thought", "Packaging dataset...")
             zip_path = await self._create_zip(output_dir, best["dataset_id"])
 
+            requested = target_size
+            downloaded = clean_result["total_downloaded"]
+            capped = clean_result.get("processed_rows", 0) >= clean_result.get("scan_cap", 0)
+            completion_message = (
+                f"Dataset ready: {downloaded} clean images found from {clean_result.get('processed_rows', 0)} scanned rows."
+                if capped and downloaded < requested
+                else f"Dataset ready: {downloaded} images, annotated and packaged."
+            )
+
             await self.emit(
                 "done",
-                f"Dataset ready: {clean_result['total_downloaded']} images, annotated and packaged.",
+                completion_message,
                 {
                     "download_url": f"/api/dataset/download/{self.job_id}",
                     "dataset_id": best["dataset_id"],
@@ -154,7 +184,7 @@ class DatasetAgent:
                                 for i, p in enumerate(clean_result.get("dup_preview_paths", []))
                             ],
                             "processed": [
-                                {"url": p.replace("\\\\", "/"), "label": "accepted", "id": i}
+                                {"url": p.replace("\\", "/"), "label": "accepted", "id": i}
                                 for i, p in enumerate(clean_result.get("processed_preview_paths", []))
                             ],
                         },
@@ -215,6 +245,34 @@ class DatasetAgent:
             return match or datasets[0]
         except Exception:
             return datasets[0]
+
+    def _candidate_order(self, preferred: dict, datasets: list[dict]) -> list[dict]:
+        def score(item: dict) -> tuple[int, int]:
+            tags = [str(tag).lower() for tag in item.get("tags", [])]
+            dataset_id = str(item.get("dataset_id", "")).lower()
+            value = 0
+            if item.get("dataset_id") == preferred.get("dataset_id"):
+                value += 100
+            if "image-classification" in tags:
+                value += 50
+            if any("classification" in tag for tag in tags):
+                value += 25
+            if any(term in dataset_id for term in ("classification", "imagenet", "flowers", "plant", "disease", "cats", "dogs")):
+                value += 10
+            if any("object-detection" in tag or "segmentation" in tag for tag in tags):
+                value -= 30
+            if any(term in dataset_id for term in ("voxel51/", "open-images", "coco", "detection", "segmentation", "mask")):
+                value -= 20
+            return (value, int(item.get("downloads") or 0))
+
+        seen: set[str] = set()
+        unique = []
+        for item in [preferred, *datasets]:
+            dataset_id = str(item.get("dataset_id", ""))
+            if dataset_id and dataset_id not in seen:
+                seen.add(dataset_id)
+                unique.append(item)
+        return sorted(unique, key=score, reverse=True)
 
     async def _create_zip(self, output_dir: Path, dataset_id: str) -> Path:
         try:

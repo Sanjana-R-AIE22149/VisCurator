@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import random
 import shutil
 from collections import defaultdict
@@ -13,11 +14,15 @@ from typing import Any
 import aiohttp
 import numpy as np
 import torch
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 from datasets import load_dataset, load_dataset_builder
+from huggingface_hub import hf_hub_download, list_repo_files
 from PIL import Image
 from transformers import CLIPModel, CLIPProcessor
 
 logger = logging.getLogger(__name__)
+logging.getLogger("datasets").setLevel(logging.CRITICAL)
+logging.getLogger("datasets.load").setLevel(logging.CRITICAL)
 
 # ── CLIP singleton — loaded once in a background thread on first use ──────────
 _clip_model: CLIPModel | None = None
@@ -43,8 +48,12 @@ async def _get_clip() -> tuple[CLIPModel, CLIPProcessor]:
 
 
 HF_API_URL = "https://huggingface.co/api/datasets"
+HF_DATASETS_SERVER_INFO_URL = "https://datasets-server.huggingface.co/info"
 HF_TIMEOUT = aiohttp.ClientTimeout(total=30)
 IMAGE_TAG_HINTS = {"image-classification", "object-detection", "image"}
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+REPO_IMAGE_COLUMN = "__repo_image_file__"
+REPO_LABEL_COLUMN = "__repo_path_label__"
 
 
 async def _safe_emit(emit_callback: Any, message: str) -> None:
@@ -82,11 +91,12 @@ def _filter_hf_results(raw_items: list[dict[str, Any]], query: str) -> list[dict
         if not isinstance(tags, list):
             tags = []
         lowered_tags = [str(tag).lower() for tag in tags]
-        if not (
-            any(any(hint in tag for hint in IMAGE_TAG_HINTS) for tag in lowered_tags)
-            or _matches_query_words(dataset_id, query_words)
-        ):
+        has_image_hint = any(any(hint in tag for hint in IMAGE_TAG_HINTS) for tag in lowered_tags)
+        matches_query = _matches_query_words(dataset_id, query_words)
+        if not (has_image_hint or matches_query):
             continue
+        is_detection_only = any("object-detection" in tag or "segmentation" in tag for tag in lowered_tags)
+        is_classification = any("image-classification" in tag or "classification" in tag for tag in lowered_tags)
         description = (
             item.get("description")
             or item.get("cardData", {}).get("summary")
@@ -100,9 +110,15 @@ def _filter_hf_results(raw_items: list[dict[str, Any]], query: str) -> list[dict
                 "downloads": int(item.get("downloads") or 0),
                 "tags": tags,
                 "task_type": _infer_task_type(tags),
+                "pipeline_score": (
+                    (50 if is_classification else 0)
+                    + (10 if matches_query else 0)
+                    - (25 if is_detection_only and not is_classification else 0)
+                    + min(int(item.get("downloads") or 0), 10000) // 1000
+                ),
             }
         )
-    return filtered
+    return sorted(filtered, key=lambda item: item.get("pipeline_score", 0), reverse=True)
 
 
 async def _search_once(query: str, max_results: int) -> list[dict[str, Any]]:
@@ -145,6 +161,39 @@ def _feature_summary(features: Any) -> dict[str, str]:
     return summary
 
 
+def _is_image_file(path: str) -> bool:
+    return Path(path).suffix.lower() in IMAGE_SUFFIXES
+
+
+def _label_from_repo_path(path: str) -> str:
+    parts = [part for part in Path(path).parts if part not in {"data", "images", "image", "imgs", "train", "test", "val", "validation"}]
+    if len(parts) >= 2:
+        return parts[-2].replace("_", " ").replace("-", " ").strip() or "unknown"
+    return "unknown"
+
+
+def _repo_image_files(dataset_id: str, limit: int = 10000) -> list[str]:
+    files = list_repo_files(repo_id=dataset_id, repo_type="dataset")
+    image_files = [path for path in files if _is_image_file(path)]
+    return image_files[:limit]
+
+
+def _inspect_from_repo_files_sync(dataset_id: str) -> dict[str, Any]:
+    image_files = _repo_image_files(dataset_id, limit=10000)
+    if not image_files:
+        raise RuntimeError("No image files found in the HuggingFace dataset repository.")
+    labels = sorted({_label_from_repo_path(path) for path in image_files})
+    if labels == ["unknown"]:
+        labels = []
+    return {
+        "status": "success", "dataset_id": dataset_id, "splits": {"repo": len(image_files)},
+        "features": {REPO_IMAGE_COLUMN: "image-file", REPO_LABEL_COLUMN: "path-label"},
+        "description": "", "homepage": "", "license": "",
+        "image_column": REPO_IMAGE_COLUMN, "label_column": REPO_LABEL_COLUMN,
+        "num_classes": len(labels) or None, "class_names": labels or None,
+    }
+
+
 def _inspect_from_builder_sync(dataset_id: str) -> dict[str, Any]:
     builder = load_dataset_builder(dataset_id)
     info = builder.info
@@ -170,7 +219,7 @@ def _inspect_from_builder_sync(dataset_id: str) -> dict[str, Any]:
 
 
 def _inspect_from_row_sync(dataset_id: str) -> dict[str, Any]:
-    sample = load_dataset(dataset_id, split="train[:1]", trust_remote_code=True)
+    sample = load_dataset(dataset_id, split="train[:1]")
     if len(sample) == 0:
         raise RuntimeError("Dataset sample is empty.")
     row = sample[0]
@@ -190,14 +239,142 @@ def _inspect_from_row_sync(dataset_id: str) -> dict[str, Any]:
     }
 
 
+def _feature_kind(feature: Any) -> str:
+    if isinstance(feature, dict):
+        raw = feature.get("_type") or feature.get("dtype") or feature.get("type") or ""
+        if not raw and isinstance(feature.get("feature"), dict):
+            raw = feature["feature"].get("_type") or feature["feature"].get("dtype") or ""
+        return str(raw).lower()
+    return type(feature).__name__.lower()
+
+
+def _feature_names(feature: Any) -> list[str] | None:
+    if isinstance(feature, dict):
+        names = feature.get("names")
+        if isinstance(names, list):
+            return [str(name) for name in names]
+        if isinstance(feature.get("feature"), dict):
+            return _feature_names(feature["feature"])
+    return None
+
+
+def _looks_like_feature_map(value: Any) -> bool:
+    if not isinstance(value, dict) or not value:
+        return False
+    return any(isinstance(v, dict) and (_feature_kind(v) or "names" in v) for v in value.values())
+
+
+def _find_feature_map(value: Any) -> dict[str, Any] | None:
+    if _looks_like_feature_map(value):
+        return value
+    if isinstance(value, dict):
+        for child in value.values():
+            found = _find_feature_map(child)
+            if found:
+                return found
+    if isinstance(value, list):
+        for child in value:
+            found = _find_feature_map(child)
+            if found:
+                return found
+    return None
+
+
+def _extract_splits(value: Any) -> dict[str, int]:
+    if isinstance(value, dict):
+        splits = value.get("splits")
+        if isinstance(splits, dict):
+            result = {}
+            for name, split in splits.items():
+                if isinstance(split, dict):
+                    result[str(name)] = int(split.get("num_examples") or split.get("num_rows") or 0)
+                else:
+                    try:
+                        result[str(name)] = int(split)
+                    except Exception:
+                        pass
+            if result:
+                return result
+        if isinstance(splits, list):
+            result = {}
+            for split in splits:
+                if isinstance(split, dict):
+                    name = split.get("name") or split.get("split")
+                    if name:
+                        result[str(name)] = int(split.get("num_examples") or split.get("num_rows") or 0)
+            if result:
+                return result
+        for child in value.values():
+            result = _extract_splits(child)
+            if result:
+                return result
+    if isinstance(value, list):
+        for child in value:
+            result = _extract_splits(child)
+            if result:
+                return result
+    return {}
+
+
+async def _inspect_from_datasets_server(dataset_id: str) -> dict[str, Any]:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+        async with session.get(HF_DATASETS_SERVER_INFO_URL, params={"dataset": dataset_id}) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise RuntimeError(f"datasets-server info failed ({resp.status}): {text[:200]}")
+            payload = await resp.json()
+
+    feature_map = _find_feature_map(payload)
+    if not feature_map:
+        raise RuntimeError("datasets-server did not return feature metadata.")
+
+    image_column = label_column = num_classes = class_names = None
+    for name, feature in feature_map.items():
+        lowered_name = str(name).lower()
+        kind = _feature_kind(feature)
+        names = _feature_names(feature)
+        if image_column is None and (kind == "image" or lowered_name in {"image", "img"}):
+            image_column = str(name)
+        if label_column is None and (kind == "classlabel" or lowered_name in {"label", "class"}):
+            label_column = str(name)
+            if names:
+                class_names = names
+                num_classes = len(names)
+
+    if image_column is None or label_column is None:
+        raise RuntimeError("datasets-server metadata did not identify image and label columns.")
+
+    return {
+        "status": "success", "dataset_id": dataset_id, "splits": _extract_splits(payload),
+        "features": {str(name): _feature_kind(feature) for name, feature in feature_map.items()},
+        "description": "", "homepage": "", "license": "",
+        "image_column": image_column, "label_column": label_column,
+        "num_classes": num_classes, "class_names": class_names,
+    }
+
+
 async def inspect_dataset(dataset_id: str) -> dict[str, Any]:
     try:
         try:
-            return await asyncio.wait_for(asyncio.to_thread(_inspect_from_builder_sync, dataset_id), timeout=30.0)
+            return await asyncio.wait_for(_inspect_from_datasets_server(dataset_id), timeout=12.0)
         except asyncio.TimeoutError:
-            return {"status": "error", "error": "timeout"}
+            logger.warning("datasets-server inspection timed out for %s", dataset_id)
         except Exception:
-            return await asyncio.wait_for(asyncio.to_thread(_inspect_from_row_sync, dataset_id), timeout=30.0)
+            logger.info("datasets-server inspection unavailable for %s; falling back", dataset_id)
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_inspect_from_row_sync, dataset_id), timeout=6.0)
+        except asyncio.TimeoutError:
+            logger.info("row inspection timed out for %s; trying repository image fallback", dataset_id)
+        except Exception as exc:
+            logger.info("row inspection failed for %s; trying repository image fallback: %s", dataset_id, exc)
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_inspect_from_repo_files_sync, dataset_id), timeout=20.0)
+        except asyncio.TimeoutError:
+            return {"status": "error", "error": "Dataset inspection timed out while listing repository image files."}
+        except Exception as exc:
+            return {"status": "error", "error": f"Dataset inspection failed: {exc}"}
     except asyncio.TimeoutError:
         return {"status": "error", "error": "timeout"}
     except Exception as e:
@@ -226,15 +403,19 @@ def _download_and_clean_sync(
     max_images: int,
     progress_queue: Any,  # queue to push progress strings back to async side
 ) -> dict[str, Any]:
+    if image_column == REPO_IMAGE_COLUMN and label_column == REPO_LABEL_COLUMN:
+        return _download_and_clean_repo_files_sync(dataset_id, output_dir, max_images, progress_queue)
+
     dataset = None
     split_name = "train"
     try:
-        dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
+        dataset = load_dataset(dataset_id, split="train")
     except Exception:
-        dataset_dict = load_dataset(dataset_id, trust_remote_code=True)
+        dataset_dict = load_dataset(dataset_id)
         if not dataset_dict:
             return {"status": "error", "error": "Dataset has no splits."}
-        split_name = next(iter(dataset_dict.keys()))
+        split_names = list(dataset_dict.keys())
+        split_name = "validation" if "validation" in split_names else ("test" if "test" in split_names else split_names[0])
         dataset = dataset_dict[split_name]
 
     label_names = _resolve_label_names(dataset, label_column)
@@ -251,13 +432,24 @@ def _download_and_clean_sync(
     blurry_samples: list[Image.Image] = []
     duplicate_samples: list[Image.Image] = []
     accepted_samples: list[Image.Image] = []  # for processed preview
+    max_scan_rows = min(total_rows, max(max_images * 4, 1000), 5000)
 
     for idx, row in enumerate(dataset):
         if sum(len(v) for v in accepted_by_label.values()) >= max_images:
             break
+        if processed_rows >= max_scan_rows:
+            progress_queue.put_nowait(
+                f"> Reached scan cap ({max_scan_rows}/{total_rows}); using the clean images found so far."
+            )
+            break
         processed_rows += 1
         if processed_rows % 50 == 0:
-            progress_queue.put_nowait(f"> Processing image {processed_rows}/{total_rows}...")
+            accepted_count = sum(len(v) for v in accepted_by_label.values())
+            rejected_count = rejected_small + rejected_blur + rejected_dup
+            progress_queue.put_nowait(
+                f"> Processing image {processed_rows}/{total_rows} "
+                f"(accepted {accepted_count}/{max_images}, rejected {rejected_count})..."
+            )
 
         img = row.get(image_column)
         if img is None or not isinstance(img, Image.Image):
@@ -334,15 +526,15 @@ def _download_and_clean_sync(
         for i, img in enumerate(blurry_samples):
             p = previews_dir / "blurry" / f"blur_{i:04d}.jpg"
             img.save(p, "JPEG", quality=80)
-            blurry_preview_paths.append(str(p.relative_to(out_path.parent)).replace("\\", "/"))
+            blurry_preview_paths.append(str(p.relative_to(out_path).as_posix()))
         for i, img in enumerate(duplicate_samples):
             p = previews_dir / "duplicates" / f"dup_{i:04d}.jpg"
             img.save(p, "JPEG", quality=80)
-            dup_preview_paths.append(str(p.relative_to(out_path.parent)).replace("\\", "/"))
+            dup_preview_paths.append(str(p.relative_to(out_path).as_posix()))
         for i, img in enumerate(accepted_samples):
             p = previews_dir / "processed" / f"proc_{i:04d}.jpg"
             img.save(p, "JPEG", quality=80)
-            processed_preview_paths.append(str(p.relative_to(out_path.parent)).replace("\\", "/"))
+            processed_preview_paths.append(str(p.relative_to(out_path).as_posix()))
     except Exception:
         pass
 
@@ -350,6 +542,148 @@ def _download_and_clean_sync(
         "status": "success", "output_dir": str(out_path), "source_split": split_name,
         "total_downloaded": total_downloaded, "rejected_small": rejected_small,
         "rejected_blur": rejected_blur, "rejected_dup": rejected_dup,
+        "processed_rows": processed_rows, "scan_cap": max_scan_rows,
+        "class_distribution": class_distribution, "splits": split_counts,
+        "blurry_preview_paths": blurry_preview_paths, "dup_preview_paths": dup_preview_paths,
+        "processed_preview_paths": processed_preview_paths,
+    }
+
+
+def _download_and_clean_repo_files_sync(
+    dataset_id: str,
+    output_dir: str,
+    max_images: int,
+    progress_queue: Any,
+) -> dict[str, Any]:
+    out_path = Path(output_dir)
+    if out_path.exists():
+        shutil.rmtree(out_path)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    image_files = _repo_image_files(dataset_id, limit=max(max_images * 5, 1000))
+    if not image_files:
+        return {"status": "error", "error": "No image files found in repository fallback mode."}
+
+    accepted_by_label: dict[str, list[Image.Image]] = defaultdict(list)
+    rejected_small = rejected_blur = rejected_dup = rejected_download = 0
+    dedup_seen: set[str] = set()
+    accepted_samples: list[Image.Image] = []
+    blurry_samples: list[Image.Image] = []
+    duplicate_samples: list[Image.Image] = []
+    processed_rows = 0
+    max_scan_rows = min(len(image_files), max(max_images * 4, 1000), 5000)
+
+    for file_path in image_files:
+        if sum(len(v) for v in accepted_by_label.values()) >= max_images:
+            break
+        if processed_rows >= max_scan_rows:
+            progress_queue.put_nowait(
+                f"> Reached repo scan cap ({max_scan_rows}/{len(image_files)}); using the clean images found so far."
+            )
+            break
+
+        processed_rows += 1
+        if processed_rows % 25 == 0:
+            accepted_count = sum(len(v) for v in accepted_by_label.values())
+            rejected_count = rejected_small + rejected_blur + rejected_dup + rejected_download
+            progress_queue.put_nowait(
+                f"> Downloading repo image {processed_rows}/{len(image_files)} "
+                f"(accepted {accepted_count}/{max_images}, rejected {rejected_count})..."
+            )
+
+        try:
+            local_path = hf_hub_download(repo_id=dataset_id, repo_type="dataset", filename=file_path)
+            img = Image.open(local_path).convert("RGB")
+        except Exception:
+            rejected_download += 1
+            continue
+
+        if img.size[0] < 32 or img.size[1] < 32:
+            rejected_small += 1
+            continue
+
+        try:
+            import cv2 as _cv2
+            gray_arr = np.array(img.convert("L"), dtype=np.float32)
+            lap_var = float(_cv2.Laplacian(gray_arr, _cv2.CV_32F).var())
+        except Exception:
+            lap_var = float(np.var(np.array(img.convert("L"), dtype=float)))
+        if lap_var < 20.0:
+            rejected_blur += 1
+            if len(blurry_samples) < 12:
+                blurry_samples.append(img.copy())
+            continue
+
+        try:
+            pixel_0 = img.getpixel((0, 0))
+        except Exception:
+            pixel_0 = (0, 0, 0)
+        dedup_hash = f"{img.size}-{pixel_0}"
+        if dedup_hash in dedup_seen:
+            rejected_dup += 1
+            if len(duplicate_samples) < 12:
+                duplicate_samples.append(img.copy())
+            continue
+        dedup_seen.add(dedup_hash)
+
+        accepted_by_label[_label_from_repo_path(file_path)].append(img.copy())
+        if len(accepted_samples) < 12:
+            accepted_samples.append(img.copy())
+
+    total_downloaded = sum(len(v) for v in accepted_by_label.values())
+    if total_downloaded == 0:
+        return {"status": "error", "error": "Repository fallback found images, but all were rejected or failed to download."}
+
+    rng = random.Random(42)
+    split_counts = {"train": 0, "val": 0, "test": 0}
+    class_distribution: dict[str, int] = {}
+    for label, images in accepted_by_label.items():
+        safe_label = label or "unknown"
+        rng.shuffle(images)
+        count = len(images)
+        class_distribution[safe_label] = count
+        train_cut = int(count * 0.70)
+        val_cut = train_cut + int(count * 0.15)
+        split_map = {"train": images[:train_cut], "val": images[train_cut:val_cut], "test": images[val_cut:]}
+        if count == 1:
+            split_map = {"train": images, "val": [], "test": []}
+        elif count == 2:
+            split_map = {"train": images[:1], "val": images[1:], "test": []}
+        for split, split_images in split_map.items():
+            class_dir = out_path / split / safe_label
+            class_dir.mkdir(parents=True, exist_ok=True)
+            for i, image in enumerate(split_images):
+                image.save(class_dir / f"{safe_label}_{i:05d}.jpg", "JPEG", quality=90)
+                split_counts[split] += 1
+
+    previews_dir = out_path / "_previews"
+    blurry_preview_paths: list[str] = []
+    dup_preview_paths: list[str] = []
+    processed_preview_paths: list[str] = []
+    try:
+        for subdir in ("blurry", "duplicates", "processed"):
+            (previews_dir / subdir).mkdir(parents=True, exist_ok=True)
+        for i, img in enumerate(blurry_samples):
+            p = previews_dir / "blurry" / f"blur_{i:04d}.jpg"
+            img.save(p, "JPEG", quality=80)
+            blurry_preview_paths.append(str(p.relative_to(out_path).as_posix()))
+        for i, img in enumerate(duplicate_samples):
+            p = previews_dir / "duplicates" / f"dup_{i:04d}.jpg"
+            img.save(p, "JPEG", quality=80)
+            dup_preview_paths.append(str(p.relative_to(out_path).as_posix()))
+        for i, img in enumerate(accepted_samples):
+            p = previews_dir / "processed" / f"proc_{i:04d}.jpg"
+            img.save(p, "JPEG", quality=80)
+            processed_preview_paths.append(str(p.relative_to(out_path).as_posix()))
+    except Exception:
+        pass
+
+    return {
+        "status": "success", "output_dir": str(out_path), "source_split": "repo-files",
+        "total_downloaded": total_downloaded, "rejected_small": rejected_small,
+        "rejected_blur": rejected_blur, "rejected_dup": rejected_dup,
+        "rejected_download": rejected_download,
+        "processed_rows": processed_rows, "scan_cap": max_scan_rows,
         "class_distribution": class_distribution, "splits": split_counts,
         "blurry_preview_paths": blurry_preview_paths, "dup_preview_paths": dup_preview_paths,
         "processed_preview_paths": processed_preview_paths,

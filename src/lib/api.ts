@@ -2,8 +2,13 @@
  * VisCurator — Backend API Client
  */
 
-export const BASE_URL = 'http://localhost:8000';
-export const WS_URL   = 'ws://localhost:8000';
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL;
+const defaultBaseUrl = configuredBaseUrl || 'http://localhost:8000';
+export const BASE_URL = defaultBaseUrl;
+
+const wsProtocol = defaultBaseUrl.startsWith('https://') ? 'wss:' : 'ws:';
+const urlHost = defaultBaseUrl.replace(/^https?:\/\//, '');
+export const WS_URL = `${wsProtocol}//${urlHost}`;
 
 // ── Token storage ─────────────────────────────────────────────────────────────
 

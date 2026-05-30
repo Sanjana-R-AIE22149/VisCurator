@@ -70,6 +70,9 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
     stream=sys.stdout,
 )
+for noisy_logger in ("httpx", "httpcore", "huggingface_hub", "huggingface_hub.utils._http", "datasets", "datasets.load"):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+logging.getLogger("datasets.load").setLevel(logging.CRITICAL)
 logger = logging.getLogger("viscurator")
 
 # ── In-memory stores ─────────────────────────────────────────
@@ -205,6 +208,78 @@ async def dataset_test_run() -> dict[str, Any]:
     return await search_huggingface("cats dogs", max_results=3)
 
 
+async def search_datasets(query: str, sources: list[str], max_results_per_source: int = 8) -> dict[str, Any]:
+    """Compatibility wrapper for the browser's historical multi-source search call."""
+    datasets: list[dict[str, Any]] = []
+    notices: list[dict[str, Any]] = []
+    source_status: dict[str, str] = {}
+
+    if "huggingface" in sources:
+        hf_result = await search_huggingface(query, max_results=max_results_per_source)
+        if hf_result.get("status") == "success":
+            source_status["HuggingFace"] = "ok"
+            for item in hf_result.get("datasets", []):
+                dataset_id = str(item.get("dataset_id", ""))
+                name = dataset_id.split("/")[-1].replace("-", " ").replace("_", " ").title()
+                datasets.append({
+                    "source": "HuggingFace",
+                    "dataset_id": dataset_id,
+                    "name": name,
+                    "description": item.get("description", ""),
+                    "downloads": item.get("downloads", 0),
+                    "likes": 0,
+                    "tags": item.get("tags", []),
+                    "url": f"https://huggingface.co/datasets/{dataset_id}",
+                    "size_estimate": "unknown",
+                })
+        else:
+            message = str(hf_result.get("error", "No results"))
+            source_status["HuggingFace"] = message
+            notices.append({
+                "source": "HuggingFace",
+                "dataset_id": "huggingface-unavailable",
+                "name": "HuggingFace unavailable",
+                "description": message,
+                "downloads": 0,
+                "likes": 0,
+                "tags": [],
+                "url": "https://huggingface.co/datasets",
+                "size_estimate": "unknown",
+                "unavailable": True,
+            })
+
+    for source in sources:
+        if source == "huggingface":
+            continue
+        label = {
+            "paperswithcode": "PapersWithCode",
+            "kaggle": "Kaggle",
+            "roboflow": "Roboflow",
+        }.get(source, source)
+        message = "Search connector not configured in this build"
+        source_status[label] = message
+        notices.append({
+            "source": label,
+            "dataset_id": f"{source}-unavailable",
+            "name": f"{label} unavailable",
+            "description": message,
+            "downloads": 0,
+            "likes": 0,
+            "tags": [],
+            "url": "",
+            "size_estimate": "unknown",
+            "unavailable": True,
+        })
+
+    return {
+        "status": "success",
+        "query": query,
+        "total_found": len(datasets),
+        "datasets": datasets[:max_results_per_source] + notices,
+        "source_status": source_status,
+    }
+
+
 # ── System Telemetry ──────────────────────────────────────────
 
 def _gpu_stats() -> dict[str, Any]:
@@ -263,7 +338,7 @@ async def browse_datasets(
     sources: str = "huggingface,paperswithcode",
     max_results: int = 8,
 ) -> dict[str, Any]:
-    """Directly call search_datasets without creating a job or starting the agent."""
+    """Browse datasets without creating a pipeline job."""
     if not q.strip():
         return {"status": "success", "query": q, "total_found": 0, "datasets": [], "source_status": {}}
     source_list = [s.strip().lower() for s in sources.split(",") if s.strip()]

@@ -123,10 +123,34 @@ export default function DatasetPage() {
   const deblurPreview = preprocessingReport?.deblur_preview ?? preprocessingReport?.stage_samples?.recovered ?? [];
   const deblurSummary = preprocessingReport?.deblur_summary;
 
-  // HF pipeline previews are served from /hfdata; local upload from /data
-  const previewBaseUrl = preprocessingReport?.hf_pipeline
-    ? `${BASE_URL}/hfdata/${preprocessingReport?.job_id}`
-    : `${BASE_URL}/data/${preprocessingReport?.dataset_id?.replace(/\//g, '_')}`;
+  const getDatasetStaticBaseUrl = () => {
+    if (!preprocessingReport?.dataset_id) return BASE_URL;
+    if (preprocessingReport.hf_pipeline && preprocessingReport.job_id) {
+      return `${BASE_URL}/hfdata/${preprocessingReport.job_id}`;
+    }
+    const datasetId = preprocessingReport.dataset_id;
+    const uuidMatch = datasetId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    const slug = uuidMatch ? `local_${datasetId.replace(/-/g, '').slice(0, 8)}` : datasetId.replace(/\//g, '_');
+    return `${BASE_URL}/data/${slug}`;
+  };
+
+  const getPreviewUrl = (url: string) => {
+    const normalizedUrl = url.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (/^https?:\/\//.test(normalizedUrl) || normalizedUrl.startsWith('data:')) return normalizedUrl;
+    if (normalizedUrl.startsWith('data/') || normalizedUrl.startsWith('hfdata/')) return `${BASE_URL}/${normalizedUrl}`;
+
+    if (preprocessingReport?.hf_pipeline && preprocessingReport.job_id) {
+      if (normalizedUrl.startsWith(`${preprocessingReport.job_id}/`)) {
+        return `${BASE_URL}/hfdata/${normalizedUrl}`;
+      }
+      if (normalizedUrl.startsWith('images/')) {
+        return `${getDatasetStaticBaseUrl()}/${normalizedUrl}`;
+      }
+      return `${getDatasetStaticBaseUrl()}/images/${normalizedUrl}`;
+    }
+
+    return `${getDatasetStaticBaseUrl()}/${normalizedUrl}`;
+  };
 
   // ── Class distribution bars ───────────────────────────────────────────────────
   const classDist = preprocessingReport?.class_distribution ?? {};
@@ -303,14 +327,13 @@ export default function DatasetPage() {
             </p>
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
               {filteredSamples.slice(0, 24).map((s, i) => {
-                const baseUrl = previewBaseUrl;
                 return (
                   <div
                     key={i}
                     className="group relative rounded-lg overflow-hidden border border-amber-500/20 bg-slate-950"
                   >
                     <img
-                      src={`${baseUrl}/${s.url}`}
+                      src={getPreviewUrl(s.url)}
                       alt={s.label}
                       className="w-full aspect-square object-cover opacity-70 group-hover:opacity-100 transition-opacity"
                       onError={(e) => {
@@ -356,14 +379,13 @@ export default function DatasetPage() {
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {deblurPreview.slice(0, 8).map((s, i) => {
-                const baseUrl = previewBaseUrl;
                 return (
                   <div key={i} className="rounded-xl border border-slate-800/60 bg-slate-950/40 p-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <p className="text-[10px] uppercase tracking-widest text-rose-300">Before</p>
                         <img
-                          src={`${baseUrl}/${s.before_url}`}
+                          src={getPreviewUrl(s.before_url)}
                           alt={`${s.label} before deblur`}
                           className="w-full aspect-square object-cover rounded-lg border border-rose-500/20"
                         />
@@ -372,7 +394,7 @@ export default function DatasetPage() {
                       <div className="space-y-2">
                         <p className="text-[10px] uppercase tracking-widest text-emerald-300">After</p>
                         <img
-                          src={`${baseUrl}/${s.after_url}`}
+                          src={getPreviewUrl(s.after_url)}
                           alt={`${s.label} after deblur`}
                           className="w-full aspect-square object-cover rounded-lg border border-emerald-500/20"
                         />

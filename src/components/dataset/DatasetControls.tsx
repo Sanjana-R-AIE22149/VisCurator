@@ -6,6 +6,7 @@ import {
   connectPipelineWebSocket,
   replyToJob,
   getHealth,
+  BASE_URL,
   type PipelineMessage,
 } from '../../lib/api';
 
@@ -323,7 +324,7 @@ export default function DatasetControls() {
     if (msg.type === 'done') {
       const data = msg.data as Record<string, unknown>;
       if (typeof data?.download_url === 'string') {
-        setDownloadUrl(`http://localhost:8000${data.download_url}`);
+        setDownloadUrl(`${BASE_URL}${data.download_url}`);
       }
       if (data?.paused) {
         const pauseType = data.type as string;

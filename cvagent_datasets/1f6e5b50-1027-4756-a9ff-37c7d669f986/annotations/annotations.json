@@ -1,0 +1,38 @@
+{
+  "metadata": {
+    "tool": "CLIP zero-shot + OpenCV GrabCut",
+    "model": "openai/clip-vit-base-patch32",
+    "class_names": [
+      "None"
+    ],
+    "total_images": 2,
+    "timestamp": "2026-05-29T21:40:06.510564+00:00"
+  },
+  "annotations": [
+    {
+      "image_path": "_previews/processed/proc_0000.jpg",
+      "original_label": "processed",
+      "clip_predicted_class": "None",
+      "clip_confidence": 1.0,
+      "verified": false
+    },
+    {
+      "image_path": "train/None/None_00000.jpg",
+      "original_label": "None",
+      "clip_predicted_class": "None",
+      "clip_confidence": 1.0,
+      "verified": true
+    }
+  ],
+  "summary": {
+    "verified_count": 1,
+    "verification_rate": 0.5,
+    "low_confidence_count": 0,
+    "class_breakdown": {
+      "None": {
+        "count": 2,
+        "avg_confidence": 1.0
+      }
+    }
+  }
+}

@@ -12,12 +12,46 @@ export default function StagePreview() {
   const { raw, filtered, processed } = preprocessingReport.stage_samples;
   const previewLimit = 12;
 
-  const getImageUrl = (url: string) => {
-    // The url in the report is relative to the dataset output dir
-    // We need to map it to /data/{dataset_id_slug}/{url}
-    const slug = preprocessingReport.dataset_id.replace(/\//g, '_');
-    return `${BASE_URL}/data/${slug}/${url}`;
+  const getStaticBaseUrl = () => {
+    if (preprocessingReport.hf_pipeline && preprocessingReport.job_id) {
+      return `${BASE_URL}/hfdata/${preprocessingReport.job_id}`;
+    }
+
+    const datasetId = preprocessingReport.dataset_id;
+    const uuidMatch = datasetId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    const slug = uuidMatch ? `local_${datasetId.replace(/-/g, '').slice(0, 8)}` : datasetId.replace(/\//g, '_');
+    return `${BASE_URL}/data/${slug}`;
   };
+
+  const getImageUrl = (url: string) => {
+    const normalizedUrl = url.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (/^https?:\/\//.test(normalizedUrl) || normalizedUrl.startsWith('data:')) {
+      return normalizedUrl;
+    }
+    if (normalizedUrl.startsWith('data/') || normalizedUrl.startsWith('hfdata/')) {
+      return `${BASE_URL}/${normalizedUrl}`;
+    }
+
+    if (preprocessingReport.hf_pipeline && preprocessingReport.job_id) {
+      if (normalizedUrl.startsWith(`${preprocessingReport.job_id}/`)) {
+        return `${BASE_URL}/hfdata/${normalizedUrl}`;
+      }
+      if (normalizedUrl.startsWith('images/')) {
+        return `${getStaticBaseUrl()}/${normalizedUrl}`;
+      }
+      return `${getStaticBaseUrl()}/images/${normalizedUrl}`;
+    }
+
+    const localBase = getStaticBaseUrl();
+    const localSlug = localBase.split('/').pop();
+    const strippedUrl = localSlug && normalizedUrl.startsWith(`${localSlug}/`)
+      ? normalizedUrl.slice(localSlug.length + 1)
+      : normalizedUrl;
+    return `${localBase}/${strippedUrl}`;
+  };
+
+  const fallbackSrc =
+    'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect fill="%230f172a" width="160" height="160"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-family="monospace" font-size="12">preview</text></svg>';
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -44,6 +78,7 @@ export default function StagePreview() {
                   src={getImageUrl(img.url)} 
                   alt="Raw" 
                   className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackSrc; }}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-black/60 p-1 px-2">
                   <p className="truncate text-[8px] font-mono text-slate-300">{img.label}</p>
@@ -70,6 +105,7 @@ export default function StagePreview() {
                     src={getImageUrl(img.url)} 
                     alt="Filtered" 
                     className="h-full w-full object-cover grayscale opacity-60"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackSrc; }}
                   />
                   <div className="absolute inset-x-0 bottom-0 bg-rose-900/80 p-1 px-2">
                     <p className="truncate text-[8px] font-mono text-white font-bold">{img.reason.toUpperCase()}</p>
@@ -100,6 +136,7 @@ export default function StagePreview() {
                   src={getImageUrl(img.url)} 
                   alt="Processed" 
                   className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackSrc; }}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-emerald-950/80 p-1 px-2">
                   <p className="truncate text-[8px] font-mono text-emerald-100 font-bold">READY</p>
@@ -118,7 +155,7 @@ export default function StagePreview() {
           Samples above represent the state of data at each checkpoint.
         </p>
         <a 
-          href={`${BASE_URL}/data/${preprocessingReport.dataset_id.replace(/\//g, '_')}/preprocessing_report.json`}
+          href={`${getStaticBaseUrl()}/preprocessing_report.json`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 rounded bg-slate-800 px-3 py-1.5 text-[10px] font-bold text-slate-300 hover:bg-slate-700 transition-colors"
